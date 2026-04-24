@@ -12,6 +12,9 @@ interface ProductCardProps {
 
 export function ProductCard({ product, onClick, onAdd }: ProductCardProps) {
   const [hover, setHover] = useState(false);
+  const primaryImage = product.imageUrl || product.images?.find((img) => img.isPrimary)?.url || product.images?.[0]?.url;
+  const secondaryImage = product.images?.find((img) => img.url && img.url !== primaryImage)?.url;
+
   return (
     <div
       onClick={() => onClick(product)}
@@ -21,7 +24,18 @@ export function ProductCard({ product, onClick, onAdd }: ProductCardProps) {
     >
       <div style={{ position: 'relative', overflow: 'hidden' }}>
         <div style={{ transform: hover ? 'scale(1.08)' : 'scale(1)', transition: 'transform 400ms cubic-bezier(.2,.8,.2,1)', width: '100%', height: '100%' }}>
-          <ProductImage product={product} size="tile" flat />
+          {secondaryImage ? (
+            <div style={{ position: 'relative' }}>
+              <div style={{ opacity: hover ? 0 : 1, transform: hover ? 'scale(0.985)' : 'scale(1)', transition: 'opacity 280ms ease, transform 380ms cubic-bezier(.2,.8,.2,1)' }}>
+                <ProductImage product={product} size="tile" flat imageUrl={primaryImage} />
+              </div>
+              <div style={{ position: 'absolute', inset: 0, opacity: hover ? 1 : 0, transform: hover ? 'scale(1)' : 'scale(1.015)', transition: 'opacity 320ms ease, transform 420ms cubic-bezier(.2,.8,.2,1)' }}>
+                <ProductImage product={product} size="tile" flat imageUrl={secondaryImage} />
+              </div>
+            </div>
+          ) : (
+            <ProductImage product={product} size="tile" flat imageUrl={primaryImage} />
+          )}
         </div>
         {product.tag && (
           <span style={{ position: 'absolute', top: 12, left: 12, background: product.tag === 'Nuevo' ? 'var(--lime)' : 'var(--ink)', color: product.tag === 'Nuevo' ? 'var(--ink)' : 'var(--cream)', fontSize: 10, fontFamily: '"JetBrains Mono", monospace', padding: '4px 8px', borderRadius: 999, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{product.tag}</span>

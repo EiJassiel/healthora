@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import type { CSSProperties } from 'react';
 import type { Product, Category } from '../types';
 import { ProductCard } from '../components/shared/ProductCard';
@@ -29,6 +30,7 @@ const seeAllLink: CSSProperties = { fontSize: 13, fontFamily: '"Geist", sans-ser
 export function Landing({ onNav, onOpenProduct, onAdd }: LandingProps) {
   const { data: products = [] } = useProducts();
   const { data: categories = [] } = useCategories();
+  const [heroDeckOpen, setHeroDeckOpen] = useState(false);
 
   const scrollTo = (id: string) => {
     const target = document.getElementById(id);
@@ -39,17 +41,24 @@ export function Landing({ onNav, onOpenProduct, onAdd }: LandingProps) {
 
   const bestSellers = products.filter((p) => p.tag === 'Best seller').slice(0, 4);
   const featured = products.slice(4, 8);
+  const heroDeckProducts = Array.from(
+    new Map(
+      products
+        .filter((p) => p.imageUrl || p.images?.length)
+        .map((p) => [p.category, p])
+    ).values()
+  ).slice(0, 6);
 
   return (
     <main>
       {/* HERO */}
       <section style={{ padding: '32px 40px 0' }}>
-        <div style={{ borderRadius: 32, overflow: 'hidden', background: 'linear-gradient(120deg, oklch(0.3 0.07 155) 0%, var(--green) 42%, oklch(0.37 0.075 155) 100%)', color: 'var(--cream)', display: 'grid', gridTemplateColumns: '1.15fr 1fr', minHeight: 560, position: 'relative' }}>
-          <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', background: 'radial-gradient(95% 90% at 84% 24%, rgba(207, 237, 53, 0.2) 0%, rgba(207, 237, 53, 0) 52%), radial-gradient(70% 70% at 8% 92%, rgba(255, 255, 255, 0.09) 0%, rgba(255, 255, 255, 0) 56%)' }} />
+        <div style={{ borderRadius: 32, overflow: 'hidden', background: 'linear-gradient(120deg, oklch(0.28 0.055 155) 0%, oklch(0.32 0.06 155) 38%, oklch(0.4 0.065 155) 100%)', color: 'var(--cream)', display: 'grid', gridTemplateColumns: '1.15fr 1fr', minHeight: 560, position: 'relative' }}>
+          <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', background: 'radial-gradient(95% 90% at 84% 24%, rgba(183, 239, 221, 0.12) 0%, rgba(183, 239, 221, 0) 52%), radial-gradient(70% 70% at 8% 92%, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0) 56%)' }} />
           <div style={{ padding: '64px 72px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', position: 'relative', zIndex: 2 }}>
             <div>
               <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '6px 14px', borderRadius: 999, background: 'rgba(255,255,255,0.08)', fontFamily: '"JetBrains Mono", monospace', fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 40 }}>
-                <span style={{ width: 6, height: 6, background: 'var(--lime)', borderRadius: 999 }} />
+                <span style={{ width: 6, height: 6, background: 'var(--lime)', borderRadius: 999, boxShadow: '0 0 14px rgba(228, 242, 72, 0.45)' }} />
                 Nueva temporada · Otoño
               </div>
               <h1 style={{ fontFamily: '"Instrument Serif", serif', fontSize: 92, lineHeight: 0.92, letterSpacing: '-0.035em', fontWeight: 400, margin: 0 }}>
@@ -63,23 +72,83 @@ export function Landing({ onNav, onOpenProduct, onAdd }: LandingProps) {
                 Vitaminas, skincare, medicamentos, cuidado personal y más desde un solo lugar, con envío rápido y pago seguro.
               </p>
               <div style={{ display: 'flex', gap: 12 }}>
-                <Button variant="lime" size="lg" onClick={() => onNav('catalog')} icon={<Icon name="arrow-right" size={14} />}>Comprar ahora</Button>
-                <Button variant="outline" size="lg" onClick={() => scrollTo('bestsellers')} style={{ color: 'var(--cream)', borderColor: 'rgba(255,255,255,0.28)', backdropFilter: 'blur(2px)' }}>Ver best sellers</Button>
+                <Button variant="lime" size="lg" onClick={() => onNav('catalog')} style={{ boxShadow: '0 14px 34px -20px rgba(0,0,0,0.45)' }} icon={<Icon name="arrow-right" size={14} />}>Comprar ahora</Button>
+                <Button variant="outline" size="lg" onClick={() => scrollTo('bestsellers')} style={{ color: 'var(--cream)', borderColor: 'rgba(255,255,255,0.18)', background: 'rgba(255,255,255,0.03)', backdropFilter: 'blur(6px)' }}>Ver best sellers</Button>
               </div>
             </div>
           </div>
           <div style={{ position: 'relative', overflow: 'hidden', zIndex: 2 }}>
             <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <div style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: 11, color: 'rgba(255,255,255,0.35)', letterSpacing: '0.15em', position: 'absolute', top: 40, right: 40 }}>LIFESTYLE / MODEL SHOT</div>
-              <div style={{ position: 'absolute', bottom: 40, left: 40, background: 'var(--cream)', color: 'var(--ink)', padding: '18px 20px', borderRadius: 18, display: 'flex', alignItems: 'center', gap: 14, maxWidth: 280, boxShadow: '0 30px 60px -30px rgba(0,0,0,0.3)' }}>
-                <div style={{ width: 52, height: 52, borderRadius: 999, background: 'var(--lime)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: '"Instrument Serif", serif', fontSize: 22 }}>4.9</div>
+              <div style={{ position: 'absolute', bottom: 40, left: 40, background: 'rgba(248, 246, 240, 0.96)', color: 'var(--ink)', padding: '18px 20px', borderRadius: 18, display: 'flex', alignItems: 'center', gap: 14, maxWidth: 280, boxShadow: '0 30px 60px -30px rgba(0,0,0,0.3)' }}>
+                <div style={{ width: 52, height: 52, borderRadius: 999, background: 'var(--lime)', color: 'oklch(0.28 0.055 155)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: '"Instrument Serif", serif', fontSize: 22 }}>4.9</div>
                 <div>
                   <div style={{ fontSize: 13, fontWeight: 500, lineHeight: 1.3 }}>24,812 clientes felices</div>
                   <div style={{ fontSize: 11, fontFamily: '"JetBrains Mono", monospace', color: 'var(--ink-60)', marginTop: 2 }}>PROMEDIO GLOBAL DE ÓRDENES</div>
                 </div>
               </div>
-              {products[0] && <div style={{ position: 'absolute', top: 80, right: 60, transform: 'rotate(-8deg)', animation: 'heroFloatA 7.5s ease-in-out infinite' }}><ProductImage product={products[0]} size="md" /></div>}
-              {products[2] && <div style={{ position: 'absolute', bottom: 110, right: 40, transform: 'rotate(6deg)', animation: 'heroFloatB 8.5s ease-in-out infinite' }}><ProductImage product={products[2]} size="sm" /></div>}
+              <div
+                onMouseEnter={() => setHeroDeckOpen(true)}
+                onMouseLeave={() => setHeroDeckOpen(false)}
+                style={{ position: 'absolute', top: 34, right: 56, width: 500, height: 360 }}
+              >
+              {heroDeckProducts.map((product, index) => {
+                const collapsed = [
+                  { x: 116, y: 112, rotate: -28, z: 1 },
+                  { x: 148, y: 82, rotate: -16, z: 2 },
+                  { x: 176, y: 62, rotate: -6, z: 3 },
+                  { x: 214, y: 76, rotate: 5, z: 4 },
+                  { x: 246, y: 104, rotate: 15, z: 5 },
+                  { x: 278, y: 74, rotate: 24, z: 6 },
+                ][index] || { x: 180, y: 84, rotate: 0, z: 1 };
+                const expanded = [
+                  { x: 22, y: 132, rotate: -34, z: 1 },
+                  { x: 78, y: 54, rotate: -21, z: 2 },
+                  { x: 154, y: 10, rotate: -9, z: 3 },
+                  { x: 238, y: 54, rotate: 6, z: 4 },
+                  { x: 316, y: 126, rotate: 19, z: 5 },
+                  { x: 358, y: 28, rotate: 28, z: 6 },
+                ][index] || collapsed;
+                const pose = heroDeckOpen ? expanded : collapsed;
+                const cardShadow = heroDeckOpen
+                  ? [
+                      '0 14px 34px -20px rgba(0,0,0,0.22), 0 36px 80px -42px rgba(0,0,0,0.28)',
+                      '0 18px 40px -22px rgba(0,0,0,0.24), 0 42px 92px -46px rgba(0,0,0,0.3)',
+                      '0 22px 48px -24px rgba(0,0,0,0.28), 0 50px 104px -52px rgba(0,0,0,0.34)',
+                      '0 24px 54px -24px rgba(0,0,0,0.3), 0 56px 118px -56px rgba(0,0,0,0.36)',
+                      '0 28px 60px -26px rgba(0,0,0,0.34), 0 62px 130px -58px rgba(0,0,0,0.38)',
+                      '0 32px 70px -28px rgba(0,0,0,0.38), 0 70px 144px -64px rgba(0,0,0,0.42)',
+                    ][index]
+                  : [
+                      '0 10px 24px -16px rgba(0,0,0,0.18), 0 24px 56px -34px rgba(0,0,0,0.24)',
+                      '0 12px 28px -16px rgba(0,0,0,0.2), 0 28px 60px -36px rgba(0,0,0,0.26)',
+                      '0 14px 32px -18px rgba(0,0,0,0.22), 0 30px 68px -38px rgba(0,0,0,0.28)',
+                      '0 16px 36px -20px rgba(0,0,0,0.24), 0 34px 74px -40px rgba(0,0,0,0.3)',
+                      '0 18px 40px -20px rgba(0,0,0,0.28), 0 40px 86px -46px rgba(0,0,0,0.34)',
+                      '0 22px 48px -22px rgba(0,0,0,0.3), 0 48px 98px -50px rgba(0,0,0,0.38)',
+                    ][index];
+
+                return (
+                  <div
+                    key={product.id}
+                    style={{
+                      position: 'absolute',
+                      top: pose.y,
+                      left: pose.x,
+                      transform: `rotate(${pose.rotate}deg)`,
+                      transition: 'top 420ms cubic-bezier(.2,.8,.2,1), left 420ms cubic-bezier(.2,.8,.2,1), transform 420ms cubic-bezier(.2,.8,.2,1), box-shadow 280ms ease',
+                      zIndex: pose.z,
+                    }}
+                  >
+                    <div style={{ animation: index % 2 === 0 ? 'heroFloatA 7.5s ease-in-out infinite' : 'heroFloatB 8.5s ease-in-out infinite' }}>
+                      <div style={{ background: 'rgba(255,255,255,0.985)', borderRadius: 20, padding: 14, boxShadow: cardShadow, border: '1px solid rgba(255,255,255,0.6)' }}>
+                        <ProductImage product={product} size="md" />
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+              </div>
             </div>
           </div>
           <style>{`
