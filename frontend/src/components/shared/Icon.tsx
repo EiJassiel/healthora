@@ -1,7 +1,9 @@
-interface IconProps { name: string; size?: number; stroke?: string; }
+import type { CSSProperties } from 'react';
 
-export function Icon({ name, size = 18, stroke = 'currentColor' }: IconProps) {
-  const common = { width: size, height: size, viewBox: '0 0 24 24', fill: 'none', stroke, strokeWidth: 1.5, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
+interface IconProps { name: string; size?: number; stroke?: string; style?: CSSProperties; }
+
+export function Icon({ name, size = 18, stroke = 'currentColor', style }: IconProps) {
+  const common = { width: size, height: size, viewBox: '0 0 24 24', fill: 'none', stroke, strokeWidth: 1.5, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const, style };
   switch (name) {
     case 'search': return <svg {...common}><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>;
     case 'user': return <svg {...common}><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-8 8-8s8 3.6 8 8"/></svg>;

@@ -98,8 +98,40 @@ El frontend queda en `http://localhost:5175` y hace proxy de `/api/*` al backend
 
 ## Seed
 
-El seed carga **12 productos** y **10 categorías** de muestra y borra los datos existentes antes de insertar.
+El seed actual carga **90 productos** y **10 categorías** con marcas reales y borra los datos existentes antes de insertar.
 
 ```bash
-cd backend && bun run seed
+cd backend
+bun run seed
 ```
+
+## Imagenes De Productos
+
+Las imagenes no se sirven desde el backend. Se cargan directamente desde el frontend usando archivos estaticos.
+
+Ruta base:
+
+- `frontend/public/products/`
+
+Convencion usada por el seed:
+
+- `imageUrl: /products/<category-folder>/<id>-1.jpg`
+- `images: /products/<category-folder>/<id>-1.jpg ... /products/<category-folder>/<id>-4.jpg`
+
+Ejemplo:
+
+- producto con `id: cerave-moisturizing-cream`
+- carpeta de categoria: `hidratantes`
+- archivos esperados:
+  - `frontend/public/products/hidratantes/cerave-moisturizing-cream-1.jpg`
+  - `frontend/public/products/hidratantes/cerave-moisturizing-cream-2.jpg`
+  - `frontend/public/products/hidratantes/cerave-moisturizing-cream-3.jpg`
+  - `frontend/public/products/hidratantes/cerave-moisturizing-cream-4.jpg`
+- URL publica principal en la app: `/products/hidratantes/cerave-moisturizing-cream-1.jpg`
+
+Si una imagen todavia no existe, la app sigue funcionando y muestra el mock visual del producto.
+
+Consulta la convencion y los archivos descargados en:
+
+- `product-image-manifest.md`
+- `product-image-download-report.json`

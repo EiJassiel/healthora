@@ -22,6 +22,13 @@ const ProductSchema = new Schema(
     swatchColor: String,
     label: String,
     imageUrl: String,
+    images: [
+      {
+        url: { type: String, required: true },
+        alt: String,
+        isPrimary: { type: Boolean, default: false },
+      },
+    ],
     active: { type: Boolean, default: true },
   },
   { timestamps: true }

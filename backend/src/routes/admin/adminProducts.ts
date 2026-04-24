@@ -13,6 +13,11 @@ const ProductBody = t.Object({
   tag: t.Optional(t.String()),
   stock: t.Optional(t.Number()),
   imageUrl: t.Optional(t.String()),
+  images: t.Optional(t.Array(t.Object({
+    url: t.String(),
+    alt: t.Optional(t.String()),
+    isPrimary: t.Optional(t.Boolean()),
+  }))),
   active: t.Optional(t.Boolean()),
 });
 

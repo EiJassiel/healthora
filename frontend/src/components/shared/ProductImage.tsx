@@ -6,6 +6,8 @@ interface ProductImageProps {
   product: Product;
   size?: SizeKey;
   flat?: boolean;
+  imageUrl?: string;
+  alt?: string;
 }
 
 const sizes: Record<SizeKey, { w: number | string; h: number; fs: number }> = {
@@ -20,12 +22,14 @@ function tintOf(color: string, amount: number) {
   return `color-mix(in oklch, ${color} ${(1 - amount) * 100}%, white)`;
 }
 
-export function ProductImage({ product, size = 'md', flat = false }: ProductImageProps) {
+export function ProductImage({ product, size = 'md', flat = false, imageUrl, alt }: ProductImageProps) {
   const s = sizes[size];
-  if (product.imageUrl) {
+  const src = imageUrl || product.imageUrl || product.images?.find((img) => img.isPrimary)?.url || product.images?.[0]?.url;
+  if (src) {
+    const imagePadding = size === 'lg' ? 24 : size === 'tile' ? 18 : size === 'md' ? 14 : 8;
     return (
-      <div style={{ width: s.w, height: s.h, background: product.color, borderRadius: flat ? 0 : 6, overflow: 'hidden', flexShrink: 0 }}>
-        <img src={product.imageUrl} alt={product.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+      <div style={{ width: s.w, height: s.h, background: 'white', borderRadius: flat ? 0 : 6, overflow: 'hidden', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: imagePadding, boxSizing: 'border-box' }}>
+        <img src={src} alt={alt || product.name} style={{ width: '100%', height: '100%', objectFit: 'contain', objectPosition: 'center center' }} />
       </div>
     );
   }

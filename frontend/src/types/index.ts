@@ -29,6 +29,11 @@ export interface Product {
   swatchColor: string;
   label: string;
   imageUrl?: string;
+  images?: {
+    url: string;
+    alt?: string;
+    isPrimary?: boolean;
+  }[];
   active: boolean;
 }
 

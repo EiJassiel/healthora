@@ -21,8 +21,18 @@ export function ProductDetail({ product, onAdd, onOpenProduct, onBack }: Product
   const [qty, setQty] = useState(1);
   const [tab, setTab] = useState('benefits');
   const [added, setAdded] = useState(false);
+  const [activeImageIndex, setActiveImageIndex] = useState(0);
   const { data: allProducts = [] } = useProducts();
   const related = allProducts.filter((p) => p.category === product.category && p.id !== product.id).slice(0, 4);
+  const gallery = product.images?.length
+    ? product.images.slice(0, 4)
+    : Array.from({ length: 4 }, (_, i) => ({
+        url: i === 0 ? product.imageUrl || '' : product.imageUrl || '',
+        alt: `${product.name} ${i + 1}`,
+        isPrimary: i === 0,
+      })).filter((img) => img.url);
+  const activeImage = gallery[activeImageIndex]?.url || product.imageUrl;
+  const hasRealImages = Boolean(activeImage);
 
   const handleAdd = () => {
     onAdd(product, qty);
@@ -38,14 +48,14 @@ export function ProductDetail({ product, onAdd, onOpenProduct, onBack }: Product
 
       <div style={{ display: 'grid', gridTemplateColumns: '1.1fr 1fr', gap: 48, alignItems: 'start' }}>
         <div>
-          <div style={{ background: product.color, borderRadius: 28, padding: 40, minHeight: 620, display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', overflow: 'hidden' }}>
-            <div style={{ position: 'absolute', top: 24, left: 24, fontFamily: '"JetBrains Mono", monospace', fontSize: 10, color: 'var(--ink-60)', letterSpacing: '0.12em' }}>01 / 04 · PRODUCT SHOT</div>
-            <ProductImage product={product} size="lg" />
+          <div style={{ background: hasRealImages ? 'white' : product.color, borderRadius: 28, padding: 40, minHeight: 620, display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', overflow: 'hidden', border: hasRealImages ? '1px solid var(--ink-06)' : 'none' }}>
+            <div style={{ position: 'absolute', top: 24, left: 24, fontFamily: '"JetBrains Mono", monospace', fontSize: 10, color: 'var(--ink-60)', letterSpacing: '0.12em' }}>{String(activeImageIndex + 1).padStart(2, '0')} / 04 · PRODUCT SHOT</div>
+            <ProductImage product={product} size="lg" imageUrl={activeImage} alt={gallery[activeImageIndex]?.alt} />
           </div>
           <div style={{ display: 'flex', gap: 10, marginTop: 12 }}>
-            {[0, 1, 2, 3].map((i) => (
-              <div key={i} style={{ flex: 1, borderRadius: 14, padding: 16, background: product.color, border: i === 0 ? '2px solid var(--ink)' : '2px solid transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', height: 100 }}>
-                <ProductImage product={product} size="xs" />
+            {gallery.map((image, i) => (
+              <div key={image.url} onClick={() => setActiveImageIndex(i)} style={{ flex: 1, borderRadius: 14, padding: 16, background: hasRealImages ? 'white' : product.color, border: i === activeImageIndex ? '2px solid var(--ink)' : hasRealImages ? '1px solid var(--ink-06)' : '2px solid transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', height: 100 }}>
+                <ProductImage product={product} size="xs" imageUrl={image.url} alt={image.alt} />
               </div>
             ))}
           </div>
