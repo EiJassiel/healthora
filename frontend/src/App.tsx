@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import type { Product } from './types';
+import { useAuth, useUser } from '@clerk/clerk-react';
 import { Topbar } from './components/chrome/Topbar';
 import { Header } from './components/chrome/Header';
 import { Footer } from './components/chrome/Footer';
@@ -12,6 +13,7 @@ import { Success } from './pages/Success';
 import { AdminApp } from './pages/admin/AdminApp';
 import { useCartStore } from './store/cartStore';
 import { useSearchParams } from 'react-router-dom';
+import { api } from './lib/api';
 
 type View = 'landing' | 'catalog' | 'product' | 'checkout' | 'success' | 'admin';
 
@@ -22,7 +24,11 @@ function AppInner() {
   const [catalogFilter, setCatalogFilter] = useState<{ category?: string; need?: string }>({});
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [cartOpen, setCartOpen] = useState(false);
-  const { add, items } = useCartStore();
+  const { user } = useUser();
+  const { getToken } = useAuth();
+  const lastLoadedOwnerRef = useRef<string | null>(null);
+  const skipNextCartSaveRef = useRef(false);
+  const { add, items, bindOwner, replaceItems } = useCartStore();
 
   useEffect(() => {
     const v = searchParams.get('view') as View | null;
@@ -32,6 +38,64 @@ function AppInner() {
   useEffect(() => {
     localStorage.setItem('healthora_view', view);
   }, [view]);
+
+  useEffect(() => {
+    bindOwner(user?.id ?? null);
+  }, [bindOwner, user?.id]);
+
+  useEffect(() => {
+    if (!user?.id) {
+      lastLoadedOwnerRef.current = null;
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadRemoteCart = async () => {
+      try {
+        const token = await getToken();
+        if (!token) return;
+        const remoteItems = await api.cart.get(token);
+        if (cancelled) return;
+        skipNextCartSaveRef.current = true;
+        replaceItems(remoteItems);
+        lastLoadedOwnerRef.current = user.id;
+      } catch (error) {
+        console.error('Failed to load remote cart', error);
+      }
+    };
+
+    void loadRemoteCart();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [getToken, replaceItems, user?.id]);
+
+  useEffect(() => {
+    if (!user?.id || lastLoadedOwnerRef.current !== user.id) return;
+    if (skipNextCartSaveRef.current) {
+      skipNextCartSaveRef.current = false;
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      void (async () => {
+        try {
+          const token = await getToken();
+          if (!token) return;
+          await api.cart.save(
+            items.map((item) => ({ productId: item.product.id, qty: item.qty })),
+            token
+          );
+        } catch (error) {
+          console.error('Failed to save remote cart', error);
+        }
+      })();
+    }, 250);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [getToken, items, user?.id]);
 
   const nav = (v: View, filter?: Record<string, string>) => {
     setView(v);

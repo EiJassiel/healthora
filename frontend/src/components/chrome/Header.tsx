@@ -41,9 +41,6 @@ export function Header({ onNav, onOpenCart }: HeaderProps) {
       </div>
 
       <div style={{ display: 'flex', gap: 18, color: 'var(--ink)', alignItems: 'center' }}>
-        <button onClick={() => onNav('admin')} style={{ fontSize: 10, fontFamily: '"JetBrains Mono", monospace', letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--ink-60)', textDecoration: 'none', padding: '6px 12px', borderRadius: 999, border: '1px solid var(--ink-20)', display: 'flex', alignItems: 'center', gap: 6, background: 'transparent', cursor: 'pointer' }}>
-          <Icon name="shield" size={12} /> Admin
-        </button>
         <div style={{ position: 'relative' }}>
           <button style={iconBtn} aria-label="Cuenta" onClick={() => {
             if (isSignedIn) {
@@ -66,6 +63,9 @@ export function Header({ onNav, onOpenCart }: HeaderProps) {
               </div>
               <button style={{ ...iconBtn, width: '100%', padding: '10px 12px', borderRadius: 8, justifyContent: 'flex-start', color: 'var(--ink)', fontSize: 13 }} onClick={() => { openUserProfile(); setUserMenuOpen(false); }}>
                 <Icon name="settings" size={14} style={{ marginRight: 8 }} /> Configuración
+              </button>
+              <button style={{ ...iconBtn, width: '100%', padding: '10px 12px', borderRadius: 8, justifyContent: 'flex-start', color: 'var(--ink)', fontSize: 13 }} onClick={() => { onNav('admin'); setUserMenuOpen(false); }}>
+                <Icon name="shield" size={14} style={{ marginRight: 8 }} /> Panel admin
               </button>
               <button style={{ ...iconBtn, width: '100%', padding: '10px 12px', borderRadius: 8, justifyContent: 'flex-start', color: 'var(--coral)', fontSize: 13 }} onClick={() => { signOut(); setUserMenuOpen(false); }}>
                 <Icon name="log-out" size={14} style={{ marginRight: 8 }} /> Cerrar sesión

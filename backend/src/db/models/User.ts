@@ -6,6 +6,12 @@ const UserSchema = new Schema(
     name: String,
     email: String,
     role: { type: String, enum: ['customer', 'admin'], default: 'customer' },
+    cart: [
+      {
+        productId: { type: String, required: true },
+        qty: { type: Number, required: true, min: 1 },
+      },
+    ],
   },
   { timestamps: true }
 );

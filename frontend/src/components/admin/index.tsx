@@ -163,14 +163,21 @@ export function Donut({ data, size = 220 }: { data: { cat?: string; pct: number;
 
 // Sidebar
 type AdminPage = 'dashboard' | 'orders' | 'products' | 'users' | 'sales' | 'earnings';
-interface SidebarProps { page: AdminPage; setPage: (p: AdminPage) => void; onGoToStore: () => void; }
+interface SidebarProps {
+  page: AdminPage;
+  setPage: (p: AdminPage) => void;
+  onGoToStore: () => void;
+  counts?: Partial<Record<AdminPage, number>>;
+  adminName?: string;
+  adminEmail?: string;
+}
 
-export function Sidebar({ page, setPage, onGoToStore }: SidebarProps) {
+export function Sidebar({ page, setPage, onGoToStore, counts, adminName, adminEmail }: SidebarProps) {
   const items: { id: AdminPage; label: string; icon: string; count?: number }[] = [
     { id: 'dashboard', label: 'Dashboard', icon: 'shield' },
-    { id: 'orders', label: 'Pedidos', icon: 'bag', count: 9 },
-    { id: 'products', label: 'Productos', icon: 'leaf', count: 12 },
-    { id: 'users', label: 'Usuarios', icon: 'user', count: 8 },
+    { id: 'orders', label: 'Pedidos', icon: 'bag', count: counts?.orders },
+    { id: 'products', label: 'Productos', icon: 'leaf', count: counts?.products },
+    { id: 'users', label: 'Usuarios', icon: 'user', count: counts?.users },
     { id: 'sales', label: 'Ventas', icon: 'truck' },
     { id: 'earnings', label: 'Ganancias', icon: 'star' },
   ];
@@ -198,8 +205,8 @@ export function Sidebar({ page, setPage, onGoToStore }: SidebarProps) {
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <div style={{ width: 32, height: 32, borderRadius: 999, background: 'var(--green)', color: 'var(--lime)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: '"Instrument Serif", serif', fontSize: 13 }}>A</div>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 12, fontWeight: 500, lineHeight: 1.2 }}>Admin</div>
-              <div style={{ fontSize: 10, fontFamily: '"JetBrains Mono", monospace', color: 'var(--ink-60)', letterSpacing: '0.04em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>ADMIN@HEALTHORA</div>
+              <div style={{ fontSize: 12, fontWeight: 500, lineHeight: 1.2 }}>{adminName || 'Admin'}</div>
+              <div style={{ fontSize: 10, fontFamily: '"JetBrains Mono", monospace', color: 'var(--ink-60)', letterSpacing: '0.04em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{adminEmail || 'ADMIN@HEALTHORA'}</div>
             </div>
           </div>
         </div>

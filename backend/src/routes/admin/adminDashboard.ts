@@ -11,7 +11,7 @@ export const adminDashboardRouter = new Elysia({ prefix: '/admin/dashboard' })
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
     const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
 
-    const [totalOrders, monthOrders, lastMonthOrders, totalUsers, lowStockProducts] = await Promise.all([
+    const [totalOrders, monthOrders, lastMonthOrders, totalUsers, lowStockSnapshot] = await Promise.all([
       Order.countDocuments({ status: { $ne: 'cancelled' } }),
       Order.find({ status: { $in: ['paid', 'processing', 'shipped', 'delivered'] }, createdAt: { $gte: startOfMonth } }).lean(),
       Order.find({ status: { $in: ['paid', 'processing', 'shipped', 'delivered'] }, createdAt: { $gte: startOfLastMonth, $lt: startOfMonth } }).lean(),
@@ -32,6 +32,7 @@ export const adminDashboardRouter = new Elysia({ prefix: '/admin/dashboard' })
     ]);
 
     const recentOrders = await Order.find().sort({ createdAt: -1 }).limit(5).lean();
+    const lowStockProducts = await Product.find({ stock: { $lte: 5, $gt: 0 }, active: true }).sort({ stock: 1 }).limit(6).lean();
 
     return {
       kpis: {
@@ -44,5 +45,6 @@ export const adminDashboardRouter = new Elysia({ prefix: '/admin/dashboard' })
       },
       dailySales,
       recentOrders,
+      lowStockProducts,
     };
   });

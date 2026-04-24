@@ -1,4 +1,5 @@
 import type { Product, Category, Order, ProductFilters } from '../types';
+import type { CartItem } from '../types';
 
 const BASE = '/api';
 
@@ -41,6 +42,11 @@ export const api = {
     bySession: (sessionId: string, token: string) =>
       request<Order>(`/orders?stripeSessionId=${sessionId}`, undefined, token),
   },
+  cart: {
+    get: (token: string) => request<CartItem[]>('/cart', undefined, token),
+    save: (items: { productId: string; qty: number }[], token: string) =>
+      request<CartItem[]>('/cart', { method: 'PUT', body: JSON.stringify({ items }) }, token),
+  },
   checkout: {
     createSession: (
       body: { items: { productId: string; qty: number }[]; address: object },
@@ -48,6 +54,7 @@ export const api = {
     ) => request<{ url: string }>('/checkout/session', { method: 'POST', body: JSON.stringify(body) }, token),
   },
   admin: {
+    access: (token: string) => request<{ allowed: boolean; role: string; name?: string; email?: string }>('/admin/access', undefined, token),
     dashboard: (token: string) => request<unknown>('/admin/dashboard', undefined, token),
     orders: (token: string, status?: string) =>
       request<unknown>(`/admin/orders${status ? `?status=${status}` : ''}`, undefined, token),
@@ -63,6 +70,8 @@ export const api = {
         request<unknown>(`/admin/products/${id}`, { method: 'DELETE' }, token),
     },
     users: (token: string) => request<unknown>('/admin/users', undefined, token),
+    updateUserRole: (id: string, role: 'customer' | 'admin', token: string) =>
+      request<unknown>(`/admin/users/${id}/role`, { method: 'PATCH', body: JSON.stringify({ role }) }, token),
     sales: (token: string) => request<unknown>('/admin/sales', undefined, token),
     earnings: (token: string) => request<unknown>('/admin/earnings', undefined, token),
   },

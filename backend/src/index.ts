@@ -5,8 +5,10 @@ import { productsRouter } from './routes/products';
 import { categoriesRouter } from './routes/categories';
 import { ordersRouter } from './routes/orders';
 import { checkoutRouter } from './routes/checkout';
+import { cartRouter } from './routes/cart';
 import { webhooksRouter } from './routes/webhooks';
 import { adminDashboardRouter } from './routes/admin/adminDashboard';
+import { adminAccessRouter } from './routes/admin/adminAccess';
 import { adminOrdersRouter } from './routes/admin/adminOrders';
 import { adminProductsRouter } from './routes/admin/adminProducts';
 import { adminUsersRouter } from './routes/admin/adminUsers';
@@ -20,8 +22,10 @@ const app = new Elysia()
   .use(productsRouter)
   .use(categoriesRouter)
   .use(ordersRouter)
+  .use(cartRouter)
   .use(checkoutRouter)
   .use(webhooksRouter)
+  .use(adminAccessRouter)
   .use(adminDashboardRouter)
   .use(adminOrdersRouter)
   .use(adminProductsRouter)

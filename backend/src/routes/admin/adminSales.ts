@@ -1,13 +1,14 @@
 import Elysia from 'elysia';
 import { requireAdmin } from '../../middleware/requireAdmin';
 import { Order } from '../../db/models/Order';
+import { Product } from '../../db/models/Product';
 
 export const adminSalesRouter = new Elysia({ prefix: '/admin/sales' })
   .use(requireAdmin)
   .get('/', async () => {
     const paidStatuses = ['paid', 'processing', 'shipped', 'delivered'];
 
-    const [daily, byCategory, topProducts] = await Promise.all([
+    const [daily, topByProductId, topProducts] = await Promise.all([
       Order.aggregate([
         { $match: { status: { $in: paidStatuses }, createdAt: { $gte: new Date(Date.now() - 30 * 864e5) } } },
         { $group: { _id: { $dateToString: { format: '%m/%d', date: '$createdAt' } }, revenue: { $sum: '$total' }, orders: { $sum: 1 } } },
@@ -29,6 +30,20 @@ export const adminSalesRouter = new Elysia({ prefix: '/admin/sales' })
         { $limit: 5 },
       ]),
     ]);
+
+    const ids = topByProductId.map((item) => item._id).filter(Boolean);
+    const products = await Product.find({ id: { $in: ids } }).select('id name category').lean();
+    const productMap = new Map(products.map((product) => [product.id, product]));
+    const byCategory = topByProductId.map((item) => {
+      const product = productMap.get(item._id as string);
+      return {
+        productId: item._id,
+        name: product?.name || item._id,
+        category: product?.category || 'Sin categoría',
+        revenue: item.revenue,
+        units: item.units,
+      };
+    });
 
     return { daily, byCategory, topProducts };
   });
