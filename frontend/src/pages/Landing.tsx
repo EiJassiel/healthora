@@ -41,13 +41,28 @@ export function Landing({ onNav, onOpenProduct, onAdd }: LandingProps) {
 
   const bestSellers = products.filter((p) => p.tag === 'Best seller').slice(0, 4);
   const featured = products.slice(4, 8);
-  const heroDeckProducts = Array.from(
+  const donnaBornInRoma = products.find((p) => p.id === 'valentino-donna-born-in-roma-eau-de-parfum');
+  const goodGirl = products.find((p) => p.id === 'carolina-herrera-good-girl-eau-de-parfum');
+  
+  const categoryDeck = Array.from(
     new Map(
       products
-        .filter((p) => p.imageUrl || p.images?.length)
+        .filter((p) => p.category !== 'Fragancias' && (p.imageUrl || p.images?.length))
         .map((p) => [p.category, p])
     ).values()
-  ).slice(0, 6);
+  ).slice(0, 5);
+  
+  let deck = [];
+  for (let i = 0; i < 5; i++) {
+    if (i === 3 && goodGirl) {
+      deck.push(goodGirl);
+    } else if (i < categoryDeck.length) {
+      deck.push(categoryDeck[i]);
+    }
+  }
+  if (donnaBornInRoma) deck.push(donnaBornInRoma);
+  
+  const heroDeckProducts = deck;
 
   return (
     <main>
