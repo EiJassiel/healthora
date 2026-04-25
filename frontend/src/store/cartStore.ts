@@ -44,11 +44,15 @@ export const useCartStore = create<CartState>()(
         })),
       add: (product, qty = 1) =>
         set((s) => {
+          if (product.stock === 0) return s;
           const ownerItems = s.cartsByOwner[s.ownerId] || [];
           const existing = ownerItems.find((i) => i.product.id === product.id);
+          const currentQty = existing?.qty ?? 0;
+          const allowed = Math.min(qty, product.stock - currentQty);
+          if (allowed <= 0) return s;
           const nextItems = existing
-            ? ownerItems.map((i) => i.product.id === product.id ? { ...i, qty: i.qty + qty } : i)
-            : [...ownerItems, { product, qty }];
+            ? ownerItems.map((i) => i.product.id === product.id ? { ...i, qty: currentQty + allowed } : i)
+            : [...ownerItems, { product, qty: allowed }];
 
           return {
             items: nextItems,
@@ -58,9 +62,10 @@ export const useCartStore = create<CartState>()(
       update: (productId, qty) =>
         set((s) => {
           const ownerItems = s.cartsByOwner[s.ownerId] || [];
+          const stock = ownerItems.find((i) => i.product.id === productId)?.product.stock ?? Infinity;
           const nextItems = qty <= 0
             ? ownerItems.filter((i) => i.product.id !== productId)
-            : ownerItems.map((i) => i.product.id === productId ? { ...i, qty } : i);
+            : ownerItems.map((i) => i.product.id === productId ? { ...i, qty: Math.min(qty, stock) } : i);
 
           return {
             items: nextItems,

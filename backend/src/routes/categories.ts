@@ -1,5 +1,7 @@
-import Elysia from 'elysia';
+import { Hono } from 'hono';
 import { Category } from '../db/models/Category';
 
-export const categoriesRouter = new Elysia({ prefix: '/categories' })
-  .get('/', () => Category.find().lean());
+export const categoriesRouter = new Hono().get('/', async (c) => {
+  const categories = await Category.find().lean();
+  return c.json(categories);
+});

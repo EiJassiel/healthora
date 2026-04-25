@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import type { Product } from './types';
+import type { CartItem, Product } from './types';
 import { useAuth, useUser } from '@clerk/clerk-react';
 import { Topbar } from './components/chrome/Topbar';
 import { Header } from './components/chrome/Header';
@@ -23,6 +23,7 @@ function AppInner() {
   const [view, setView] = useState<View>(initialView);
   const [catalogFilter, setCatalogFilter] = useState<{ category?: string; need?: string; search?: string }>({});
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const [checkoutItems, setCheckoutItems] = useState<CartItem[] | null>(null);
   const [cartOpen, setCartOpen] = useState(false);
   const [showBackToTop, setShowBackToTop] = useState(false);
   const { user } = useUser();
@@ -108,6 +109,7 @@ function AppInner() {
   const nav = (v: View, filter?: Record<string, string>, noScroll?: boolean) => {
     setView(v);
     if (filter) setCatalogFilter(filter);
+    if (v !== 'checkout') setCheckoutItems(null);
     setSearchParams(v !== 'landing' ? { view: v } : {});
     if (!noScroll) window.scrollTo(0, 0);
   };
@@ -125,12 +127,24 @@ function AppInner() {
     <>
       <Topbar />
       <Header onNav={nav} onOpenCart={() => setCartOpen(true)} />
-      <CartDrawer open={cartOpen} onClose={() => setCartOpen(false)} onCheckout={() => { setCartOpen(false); nav('checkout'); }} />
+      <CartDrawer open={cartOpen} onClose={() => setCartOpen(false)} onCheckout={() => { setCheckoutItems(null); setCartOpen(false); nav('checkout'); }} />
       <div style={{ minHeight: 'calc(100vh - 200px)' }}>
-        {view === 'landing' && <Landing onNav={nav} onOpenProduct={openProduct} onAdd={(p, qty = 1) => { add(p, qty); setCartOpen(true); }} />}
-        {view === 'catalog' && <Catalog initialFilter={catalogFilter} onOpenProduct={openProduct} onAdd={(p) => { add(p, 1); setCartOpen(true); }} />}
-        {view === 'product' && selectedProduct && <ProductDetail product={selectedProduct} onAdd={(p, qty) => { add(p, qty); setCartOpen(true); }} onOpenProduct={openProduct} onBack={() => nav('catalog')} />}
-        {view === 'checkout' && <Checkout items={items} onBack={() => nav('catalog')} />}
+        {view === 'landing' && <Landing onNav={nav} onOpenProduct={openProduct} onAdd={(p, qty = 1) => { add(p, qty); setCheckoutItems(null); setCartOpen(true); }} />}
+        {view === 'catalog' && <Catalog initialFilter={catalogFilter} onOpenProduct={openProduct} onAdd={(p) => { add(p, 1); setCheckoutItems(null); setCartOpen(true); }} />}
+        {view === 'product' && selectedProduct && (
+          <ProductDetail
+            product={selectedProduct}
+            onAdd={(p, qty) => { add(p, qty); setCheckoutItems(null); setCartOpen(true); }}
+            onBuyNow={(p, qty) => {
+              setCheckoutItems([{ product: p, qty }]);
+              setCartOpen(false);
+              nav('checkout');
+            }}
+            onOpenProduct={openProduct}
+            onBack={() => nav('catalog')}
+          />
+        )}
+        {view === 'checkout' && <Checkout items={checkoutItems ?? items} onBack={() => nav('catalog')} />}
         {view === 'success' && <Success onBack={() => nav('landing')} />}
       </div>
       {showBackToTop && (

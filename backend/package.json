@@ -8,9 +8,11 @@
   },
   "dependencies": {
     "@clerk/backend": "^3.3.0",
-    "@elysiajs/cors": "^1.4.1",
-    "elysia": "^1.4.28",
+    "hono": "^4.12.15",
     "mongoose": "^9.5.0",
     "stripe": "^22.0.2"
+  },
+  "devDependencies": {
+    "bun-types": "^1.0.0"
   }
 }

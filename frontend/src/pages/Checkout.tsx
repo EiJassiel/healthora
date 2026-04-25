@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import { useUser, useClerk } from '@clerk/clerk-react';
-import type { CartItem, OrderAddress } from '../types';
+import type { CartItem, OrderAddress, SavedAddress } from '../types';
 import { ProductImage } from '../components/shared/ProductImage';
 import { Button } from '../components/shared/Button';
 import { Icon } from '../components/shared/Icon';
@@ -21,11 +21,13 @@ function Row({ k, v }: { k: ReactNode; v: ReactNode }) {
   );
 }
 
-function FormInput({ label, value, onChange, placeholder, full }: { label: string; value: string; onChange: (v: string) => void; placeholder?: string; full?: boolean }) {
+function FormInput({ label, value, onChange, placeholder, full, required }: { label: string; value: string; onChange: (v: string) => void; placeholder?: string; full?: boolean; required?: boolean }) {
   return (
     <label style={{ display: 'flex', flexDirection: 'column', gap: 6, gridColumn: full ? '1 / -1' : 'auto' }}>
-      <span style={{ fontSize: 11, fontFamily: '"JetBrains Mono", monospace', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--ink-60)' }}>{label}</span>
-      <input value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} style={{ padding: '12px 14px', border: '1px solid var(--ink-20)', borderRadius: 10, background: 'var(--cream)', fontSize: 14, fontFamily: '"Geist", sans-serif', color: 'var(--ink)', outline: 'none' }} />
+      <span style={{ fontSize: 11, fontFamily: '"JetBrains Mono", monospace', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--ink-60)' }}>
+        {label} {required && <span style={{ color: 'var(--coral)' }}>*</span>}
+      </span>
+      <input value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} required={required} style={{ padding: '12px 14px', border: '1px solid var(--ink-20)', borderRadius: 10, background: 'var(--cream)', fontSize: 14, fontFamily: '"Geist", sans-serif', color: 'var(--ink)', outline: 'none' }} />
     </label>
   );
 }
@@ -35,6 +37,8 @@ const stepHeader: CSSProperties = { display: 'flex', justifyContent: 'space-betw
 const stepNum: CSSProperties = { fontFamily: '"JetBrains Mono", monospace', fontSize: 10, color: 'var(--ink-60)', letterSpacing: '0.12em', marginBottom: 4 };
 const stepTitle: CSSProperties = { fontFamily: '"Instrument Serif", serif', fontSize: 28, letterSpacing: '-0.02em', margin: 0, color: 'var(--ink)', fontWeight: 400 };
 const authBtn: CSSProperties = { padding: '14px 18px', borderRadius: 12, border: '1px solid var(--ink-20)', background: 'var(--cream)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 12, fontSize: 14, fontFamily: '"Geist", sans-serif', color: 'var(--ink)', width: '100%' };
+const authLogoWrap: CSSProperties = { width: 28, height: 28, borderRadius: 8, background: 'white', border: '1px solid var(--ink-06)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, boxShadow: '0 6px 14px -12px rgba(0,0,0,0.24)' };
+const authLogoImg: CSSProperties = { width: 18, height: 18, display: 'block' };
 
 export function Checkout({ items, onBack }: CheckoutProps) {
   const { isSignedIn, user } = useUser();
@@ -42,8 +46,49 @@ export function Checkout({ items, onBack }: CheckoutProps) {
   const { getToken } = useAuth();
   const [step, setStep] = useState(isSignedIn ? 2 : 1);
   const [address, setAddress] = useState<OrderAddress>({ name: '', phone: '', address: '', city: '', postal: '' });
+  const [savedAddresses, setSavedAddresses] = useState<SavedAddress[]>([]);
   const [processing, setProcessing] = useState(false);
   const [error, setError] = useState('');
+  const [addressError, setAddressError] = useState('');
+
+  const isAddressValid = address.name.trim() && address.phone.trim() && address.address.trim() && address.city.trim() && address.postal.trim();
+
+  useEffect(() => {
+    if (!isSignedIn) return;
+
+    let cancelled = false;
+
+    const loadSavedAddresses = async () => {
+      try {
+        const token = await getToken();
+        if (!token) return;
+        const addresses = await api.account.addresses.list(token);
+        if (cancelled) return;
+        setSavedAddresses(addresses);
+
+        const primaryAddress = addresses.find((entry) => entry.isDefault) || addresses[0];
+        if (!primaryAddress) return;
+
+        setAddress((current) => current.name || current.phone || current.address || current.city || current.postal
+          ? current
+          : {
+              name: primaryAddress.name,
+              phone: primaryAddress.phone,
+              address: primaryAddress.address,
+              city: primaryAddress.city,
+              postal: primaryAddress.postal,
+            });
+      } catch (loadError) {
+        console.error('Failed to load saved addresses', loadError);
+      }
+    };
+
+    void loadSavedAddresses();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [getToken, isSignedIn]);
 
   const subtotal = items.reduce((s, it) => s + it.product.price * it.qty, 0);
   const shipping = subtotal > 50 ? 0 : 6.90;
@@ -51,6 +96,10 @@ export function Checkout({ items, onBack }: CheckoutProps) {
   const total = subtotal + shipping + tax;
 
   const handlePay = async () => {
+    if (!isAddressValid) {
+      setAddressError('Por favor completa todos los campos requeridos');
+      return;
+    }
     setProcessing(true);
     setError('');
     try {
@@ -98,13 +147,14 @@ export function Checkout({ items, onBack }: CheckoutProps) {
             {!isSignedIn ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 20 }}>
                 <button style={authBtn} onClick={() => openSignIn({ redirectUrl: window.location.href })}>
-                  <span style={{ width: 20, height: 20, borderRadius: 4, background: 'conic-gradient(#ea4335, #fbbc04, #34a853, #4285f4)' }} />
+                  <span style={authLogoWrap}>
+                    <img src="/brands/google.svg" alt="Google" style={authLogoImg} />
+                  </span>
                   Continuar con Google
                 </button>
                 <button style={authBtn} onClick={() => openSignIn({ redirectUrl: window.location.href })}>
-                  <span style={{ width: 20, height: 20, background: '#00a4ef', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1 }}>
-                    <div style={{ background: '#f25022' }} /><div style={{ background: '#7fba00' }} />
-                    <div style={{ background: '#00a4ef' }} /><div style={{ background: '#ffb900' }} />
+                  <span style={authLogoWrap}>
+                    <img src="/brands/microsoft.svg" alt="Microsoft" style={authLogoImg} />
                   </span>
                   Continuar con Microsoft
                 </button>
@@ -134,16 +184,44 @@ export function Checkout({ items, onBack }: CheckoutProps) {
                 <h2 style={stepTitle}>Dirección de envío</h2>
               </div>
             </div>
+            {savedAddresses.length > 0 && (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 20 }}>
+                {savedAddresses.map((savedAddress, index) => (
+                  <button
+                    key={`${savedAddress.label}-${savedAddress.address}-${index}`}
+                    onClick={() => setAddress({
+                      name: savedAddress.name,
+                      phone: savedAddress.phone,
+                      address: savedAddress.address,
+                      city: savedAddress.city,
+                      postal: savedAddress.postal,
+                    })}
+                    style={{
+                      border: savedAddress.isDefault ? '1px solid color-mix(in oklab, var(--green) 24%, white)' : '1px solid var(--ink-12)',
+                      background: savedAddress.isDefault ? 'color-mix(in oklab, var(--green) 8%, white)' : 'var(--cream)',
+                      borderRadius: 999,
+                      padding: '8px 12px',
+                      cursor: 'pointer',
+                      fontSize: 12,
+                      fontFamily: '"Geist", sans-serif',
+                      color: 'var(--ink)',
+                    }}
+                  >
+                    {savedAddress.label || `Dirección ${index + 1}`}
+                  </button>
+                ))}
+              </div>
+            )}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 20 }}>
-              <FormInput label="Nombre completo" value={address.name} onChange={(v) => setAddress({ ...address, name: v })} placeholder="María Gómez" />
-              <FormInput label="Teléfono" value={address.phone} onChange={(v) => setAddress({ ...address, phone: v })} placeholder="+1 555 000 000" />
-              <FormInput label="Dirección" value={address.address} onChange={(v) => setAddress({ ...address, address: v })} placeholder="Calle, número, apto" full />
-              <FormInput label="Ciudad" value={address.city} onChange={(v) => setAddress({ ...address, city: v })} placeholder="Ciudad" />
-              <FormInput label="Código postal" value={address.postal} onChange={(v) => setAddress({ ...address, postal: v })} placeholder="10001" />
+              <FormInput label="Nombre completo" value={address.name} onChange={(v) => { setAddress({ ...address, name: v }); setAddressError(''); }} placeholder="María Gómez" required />
+              <FormInput label="Teléfono" value={address.phone} onChange={(v) => { setAddress({ ...address, phone: v }); setAddressError(''); }} placeholder="+1 555 000 000" required />
+              <FormInput label="Dirección" value={address.address} onChange={(v) => { setAddress({ ...address, address: v }); setAddressError(''); }} placeholder="Calle, número, apto" full required />
+              <FormInput label="Ciudad" value={address.city} onChange={(v) => { setAddress({ ...address, city: v }); setAddressError(''); }} placeholder="Ciudad" required />
+              <FormInput label="Código postal" value={address.postal} onChange={(v) => { setAddress({ ...address, postal: v.replace(/\D/g, '') }); setAddressError(''); }} placeholder="10001" required />
             </div>
+            {addressError && <div style={{ marginTop: 12, color: 'var(--coral)', fontSize: 13, fontFamily: '"Geist", sans-serif' }}>{addressError}</div>}
             {step === 2 && (
-              <Button variant="primary" onClick={() => setStep(3)} style={{ marginTop: 16 }}
-                disabled={!address.name || !address.address || !address.city || !address.postal}>
+              <Button variant="primary" onClick={() => { if (!isAddressValid) { setAddressError('Por favor completa todos los campos requeridos'); } else { setStep(3); }}} style={{ marginTop: 16 }} disabled={!isAddressValid}>
                 Continuar al pago
               </Button>
             )}

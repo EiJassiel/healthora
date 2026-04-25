@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import { useCartStore } from '../store/cartStore';
 import { ProductImage } from '../components/shared/ProductImage';
@@ -22,11 +23,21 @@ const iconBtn = { background: 'transparent', border: 'none', cursor: 'pointer', 
 const qtyBtn = { width: 28, height: 28, borderRadius: 999, border: 'none', background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' } as const;
 
 export function CartDrawer({ open, onClose, onCheckout }: CartDrawerProps) {
-  const { items, update, remove } = useCartStore();
+  const { items, update, remove, clear } = useCartStore();
+  const [confirmClearOpen, setConfirmClearOpen] = useState(false);
   const subtotal = items.reduce((s, it) => s + it.product.price * it.qty, 0);
   const shipping = subtotal > 50 || subtotal === 0 ? 0 : 6.90;
   const tax = subtotal * 0.07;
   const total = subtotal + shipping + tax;
+
+  useEffect(() => {
+    if (!open) setConfirmClearOpen(false);
+  }, [open]);
+
+  const handleConfirmClear = () => {
+    clear();
+    setConfirmClearOpen(false);
+  };
 
   return (
     <>
@@ -50,10 +61,33 @@ export function CartDrawer({ open, onClose, onCheckout }: CartDrawerProps) {
         ) : (
           <>
             <div style={{ flex: 1, overflow: 'auto', padding: '8px 28px' }}>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '8px 0 6px' }}>
+                <button
+                  onClick={() => setConfirmClearOpen(true)}
+                  style={{
+                    border: '1px solid color-mix(in oklab, var(--coral) 24%, white)',
+                    background: 'color-mix(in oklab, var(--coral) 12%, white)',
+                    cursor: 'pointer',
+                    fontSize: 11,
+                    fontFamily: '"JetBrains Mono", monospace',
+                    letterSpacing: '0.08em',
+                    textTransform: 'uppercase',
+                    color: 'var(--coral)',
+                    padding: '9px 14px',
+                    borderRadius: 999,
+                    fontWeight: 700,
+                    boxShadow: '0 10px 24px -18px rgba(0,0,0,0.28)',
+                  }}
+                >
+                  Vaciar carrito
+                </button>
+              </div>
               {items.map((it) => (
                 <div key={it.product.id} style={{ display: 'flex', gap: 14, padding: '18px 0', borderBottom: '1px solid var(--ink-06)' }}>
-                  <div style={{ width: 80, height: 90, background: it.product.color, borderRadius: 10, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <ProductImage product={it.product} size="xs" />
+                  <div style={{ width: 80, height: 90, background: 'white', borderRadius: 10, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid var(--ink-06)', overflow: 'hidden' }}>
+                    <div style={{ transform: 'scale(1.18)' }}>
+                      <ProductImage product={it.product} size="xs" />
+                    </div>
                   </div>
                   <div style={{ flex: 1 }}>
                     <div style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: 10, color: 'var(--ink-60)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4 }}>{it.product.brand}</div>
@@ -83,6 +117,51 @@ export function CartDrawer({ open, onClose, onCheckout }: CartDrawerProps) {
               </div>
             </div>
           </>
+        )}
+
+        {confirmClearOpen && (
+          <div
+            onClick={() => setConfirmClearOpen(false)}
+            style={{
+              position: 'absolute',
+              inset: 0,
+              background: 'rgba(17, 24, 20, 0.28)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: 24,
+              zIndex: 3,
+            }}
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                width: '100%',
+                maxWidth: 360,
+                background: 'var(--cream)',
+                border: '1px solid var(--ink-06)',
+                borderRadius: 24,
+                boxShadow: '0 28px 80px -36px rgba(0,0,0,0.32)',
+                overflow: 'hidden',
+              }}
+            >
+              <div style={{ padding: '22px 24px 18px', borderBottom: '1px solid var(--ink-06)' }}>
+                <div style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--ink-60)', marginBottom: 8 }}>
+                  Confirmación
+                </div>
+                <div style={{ fontFamily: '"Instrument Serif", serif', fontSize: 32, lineHeight: 1, letterSpacing: '-0.03em', color: 'var(--ink)' }}>
+                  Vaciar <em style={{ color: 'var(--green)' }}>carrito</em>
+                </div>
+                <p style={{ margin: '12px 0 0', fontSize: 14, lineHeight: 1.55, color: 'var(--ink-80)', fontFamily: '"Geist", sans-serif' }}>
+                  Se eliminarán todos los productos del carrito. Esta acción no se puede deshacer.
+                </p>
+              </div>
+              <div style={{ padding: 24, display: 'flex', gap: 10, justifyContent: 'flex-end', background: 'var(--cream-2)' }}>
+                <Button variant="outline" onClick={() => setConfirmClearOpen(false)}>Cancelar</Button>
+                <Button variant="primary" onClick={handleConfirmClear}>Sí, vaciar todo</Button>
+              </div>
+            </div>
+          </div>
         )}
       </aside>
     </>

@@ -37,19 +37,25 @@ export function ProductCard({ product, onClick, onAdd }: ProductCardProps) {
             <ProductImage product={product} size="tile" flat imageUrl={primaryImage} />
           )}
         </div>
-        {product.tag && (
+        {product.stock === 0 ? (
+          <span style={{ position: 'absolute', top: 12, left: 12, background: 'var(--ink)', color: 'var(--cream)', fontSize: 10, fontFamily: '"JetBrains Mono", monospace', padding: '4px 8px', borderRadius: 999, textTransform: 'uppercase', letterSpacing: '0.05em', opacity: 0.7 }}>Agotado</span>
+        ) : product.tag ? (
           <span style={{ position: 'absolute', top: 12, left: 12, background: product.tag === 'Nuevo' ? 'var(--lime)' : 'var(--ink)', color: product.tag === 'Nuevo' ? 'var(--ink)' : 'var(--cream)', fontSize: 10, fontFamily: '"JetBrains Mono", monospace', padding: '4px 8px', borderRadius: 999, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{product.tag}</span>
-        )}
-        {product.priceBefore && (
+        ) : null}
+        {product.stock > 0 && product.priceBefore && (
           <span style={{ position: 'absolute', top: 12, right: 12, background: 'var(--coral)', color: 'white', fontSize: 10, fontFamily: '"JetBrains Mono", monospace', padding: '4px 8px', borderRadius: 999, fontWeight: 600 }}>−{Math.round((1 - product.price / product.priceBefore) * 100)}%</span>
         )}
-        <button
-          onClick={(e) => { e.stopPropagation(); onAdd(product); }}
-          style={{ position: 'absolute', bottom: 12, right: 12, width: 40, height: 40, borderRadius: 999, background: 'var(--ink)', color: 'var(--cream)', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transform: hover ? 'scale(1.1) rotate(180deg)' : 'scale(0.85) rotate(0deg)', opacity: hover ? 1 : 0.8, transition: 'all 500ms cubic-bezier(0.34, 1.56, 0.64, 1)', boxShadow: hover ? '0 8px 20px rgba(0,0,0,0.15)' : 'none' }}
-          aria-label="Agregar al carrito"
-        >
-          <Icon name="plus" size={16} />
-        </button>
+        {product.stock === 0 ? (
+          <div style={{ position: 'absolute', inset: 0, background: 'rgba(253,252,250,0.45)', backdropFilter: 'grayscale(0.4)' }} />
+        ) : (
+          <button
+            onClick={(e) => { e.stopPropagation(); onAdd(product); }}
+            style={{ position: 'absolute', bottom: 12, right: 12, width: 40, height: 40, borderRadius: 999, background: 'var(--ink)', color: 'var(--cream)', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transform: hover ? 'scale(1.1) rotate(180deg)' : 'scale(0.85) rotate(0deg)', opacity: hover ? 1 : 0.8, transition: 'all 500ms cubic-bezier(0.34, 1.56, 0.64, 1)', boxShadow: hover ? '0 8px 20px rgba(0,0,0,0.15)' : 'none' }}
+            aria-label="Agregar al carrito"
+          >
+            <Icon name="plus" size={16} />
+          </button>
+        )}
       </div>
       <div style={{ padding: '16px 16px 18px' }}>
         <div style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: 10, color: 'var(--ink-60)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6 }}>{product.brand}</div>

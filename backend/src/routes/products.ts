@@ -1,8 +1,9 @@
-import Elysia, { t } from 'elysia';
+import { Hono } from 'hono';
 import { Product } from '../db/models/Product';
 
-export const productsRouter = new Elysia({ prefix: '/products' })
-  .get('/', async ({ query }) => {
+export const productsRouter = new Hono()
+  .get('/', async (c) => {
+    const query = c.req.query();
     const filter: Record<string, unknown> = { active: true };
     if (query.category) filter.category = query.category;
     if (query.need) filter.need = query.need;
@@ -17,20 +18,10 @@ export const productsRouter = new Elysia({ prefix: '/products' })
     else if (query.sort === 'rating') q = q.sort({ rating: -1 });
     else q = q.sort({ createdAt: -1 });
 
-    return q.lean();
-  }, {
-    query: t.Object({
-      category: t.Optional(t.String()),
-      need: t.Optional(t.String()),
-      brand: t.Optional(t.String()),
-      priceMax: t.Optional(t.String()),
-      sort: t.Optional(t.String()),
-      inStock: t.Optional(t.String()),
-      search: t.Optional(t.String()),
-    }),
+    return c.json(await q.lean());
   })
-  .get('/:id', async ({ params, set }) => {
-    const p = await Product.findOne({ id: params.id, active: true }).lean();
-    if (!p) { set.status = 404; return { error: 'Not found' }; }
-    return p;
+  .get('/:id', async (c) => {
+    const p = await Product.findOne({ id: c.req.param('id'), active: true }).lean();
+    if (!p) return c.json({ error: 'Not found' }, 404);
+    return c.json(p);
   });

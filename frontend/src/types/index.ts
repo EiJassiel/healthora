@@ -1,3 +1,7 @@
+export type PaymentStatus = 'pending_payment' | 'paid' | 'cancelled' | 'refunded';
+
+export type FulfillmentStatus = 'unfulfilled' | 'processing' | 'shipped' | 'delivered' | 'cancelled';
+
 export type OrderStatus =
   | 'pending_payment'
   | 'paid'
@@ -35,6 +39,8 @@ export interface Product {
     isPrimary?: boolean;
   }[];
   active: boolean;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface Category {
@@ -58,6 +64,11 @@ export interface OrderAddress {
   postal: string;
 }
 
+export interface SavedAddress extends OrderAddress {
+  label?: string;
+  isDefault: boolean;
+}
+
 export interface OrderLineItem {
   productId: string;
   productName: string;
@@ -76,6 +87,8 @@ export interface Order {
   shipping: number;
   total: number;
   status: OrderStatus;
+  paymentStatus: PaymentStatus;
+  fulfillmentStatus: FulfillmentStatus;
   stripeSessionId: string;
   stripePaymentIntentId?: string;
   address: OrderAddress;

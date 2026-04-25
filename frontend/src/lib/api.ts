@@ -1,4 +1,4 @@
-import type { Product, Category, Order, ProductFilters } from '../types';
+import type { Product, Category, Order, ProductFilters, SavedAddress } from '../types';
 import type { CartItem } from '../types';
 
 const BASE = '/api';
@@ -11,6 +11,7 @@ async function request<T>(path: string, opts?: RequestInit, token?: string): Pro
     const err = await res.json().catch(() => ({ error: res.statusText }));
     throw new Error(err.error || `HTTP ${res.status}`);
   }
+  if (res.status === 204 || res.headers.get('content-length') === '0') return null as T;
   return res.json();
 }
 
@@ -42,6 +43,13 @@ export const api = {
     bySession: (sessionId: string, token: string) =>
       request<Order>(`/orders?stripeSessionId=${sessionId}`, undefined, token),
   },
+  account: {
+    addresses: {
+      list: (token: string) => request<SavedAddress[]>('/account/addresses', undefined, token),
+      save: (addresses: SavedAddress[], token: string) =>
+        request<SavedAddress[]>('/account/addresses', { method: 'PUT', body: JSON.stringify({ addresses }) }, token),
+    },
+  },
   cart: {
     get: (token: string) => request<CartItem[]>('/cart', undefined, token),
     save: (items: { productId: string; qty: number }[], token: string) =>
@@ -56,10 +64,10 @@ export const api = {
   admin: {
     access: (token: string) => request<{ allowed: boolean; role: string; name?: string; email?: string }>('/admin/access', undefined, token),
     dashboard: (token: string) => request<unknown>('/admin/dashboard', undefined, token),
-    orders: (token: string, status?: string) =>
-      request<unknown>(`/admin/orders${status ? `?status=${status}` : ''}`, undefined, token),
-    patchOrderStatus: (id: string, status: string, token: string) =>
-      request<unknown>(`/admin/orders/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status }) }, token),
+    orders: (token: string, fulfillmentStatus?: string) =>
+      request<unknown>(`/admin/orders${fulfillmentStatus ? `?fulfillmentStatus=${fulfillmentStatus}` : ''}`, undefined, token),
+    patchOrderStatuses: (id: string, body: { paymentStatus?: string; fulfillmentStatus?: string }, token: string) =>
+      request<unknown>(`/admin/orders/${id}/statuses`, { method: 'PATCH', body: JSON.stringify(body) }, token),
     products: {
       list: (token: string) => request<Product[]>('/admin/products', undefined, token),
       create: (data: Partial<Product>, token: string) =>

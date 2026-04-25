@@ -1,12 +1,8 @@
-import Elysia, { t } from 'elysia';
+import { Hono } from 'hono';
 import { clerkAuth } from '../middleware/clerkAuth';
+import type { AppEnv } from '../types/hono';
 import { User } from '../db/models/User';
 import { Product } from '../db/models/Product';
-
-const CartItemBody = t.Object({
-  productId: t.String(),
-  qty: t.Number(),
-});
 
 async function buildCartResponse(clerkId: string) {
   const user = await User.findOne({ clerkId }).lean();
@@ -24,35 +20,33 @@ async function buildCartResponse(clerkId: string) {
     .filter(Boolean);
 }
 
-export const cartRouter = new Elysia({ prefix: '/cart' })
-  .use(clerkAuth)
-  .get('/', async ({ user }) => buildCartResponse(user.clerkId))
-  .put(
-    '/',
-    async ({ user, body, set }) => {
-      const sanitizedItems = body.items
-        .map((item) => ({ productId: item.productId, qty: Math.max(0, Math.floor(item.qty)) }))
-        .filter((item) => item.qty > 0);
+export const cartRouter = new Hono<AppEnv>()
+  .use('*', clerkAuth)
+  .get('/', async (c) => {
+    return c.json(await buildCartResponse(c.get('user').clerkId));
+  })
+  .put('/', async (c) => {
+    const body = await c.req.json<{ items?: { productId: string; qty: number }[] }>();
+    const items = Array.isArray(body.items) ? body.items : [];
 
-      const uniqueProductIds = [...new Set(sanitizedItems.map((item) => item.productId))];
-      const existingProducts = await Product.find({ id: { $in: uniqueProductIds }, active: true }).select('id').lean();
-      const validIds = new Set(existingProducts.map((product) => product.id));
-      const validItems = sanitizedItems.filter((item) => validIds.has(item.productId));
+    const sanitizedItems = items
+      .map((item) => ({ productId: item.productId, qty: Math.max(0, Math.floor(item.qty)) }))
+      .filter((item) => item.qty > 0);
 
-      const updatedUser = await User.findOneAndUpdate(
-        { clerkId: user.clerkId },
-        { $set: { cart: validItems } },
-        { new: true }
-      ).lean();
+    const uniqueProductIds = [...new Set(sanitizedItems.map((item) => item.productId))];
+    const existingProducts = await Product.find({ id: { $in: uniqueProductIds }, active: true }).select('id').lean();
+    const validIds = new Set(existingProducts.map((product) => product.id));
+    const validItems = sanitizedItems.filter((item) => validIds.has(item.productId));
 
-      if (!updatedUser) {
-        set.status = 404;
-        return { error: 'User not found' };
-      }
+    const updatedUser = await User.findOneAndUpdate(
+      { clerkId: c.get('user').clerkId },
+      { $set: { cart: validItems } },
+      { returnDocument: 'after' }
+    ).lean();
 
-      return buildCartResponse(user.clerkId);
-    },
-    {
-      body: t.Object({ items: t.Array(CartItemBody) }),
+    if (!updatedUser) {
+      return c.json({ error: 'User not found' }, 404);
     }
-  );
+
+    return c.json(await buildCartResponse(c.get('user').clerkId));
+  });

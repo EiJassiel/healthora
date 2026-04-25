@@ -39,6 +39,8 @@ Thumbs.db
 .claude/
 .playwright-mcp/
 skills-lock.json
+scripts/
+tmp/
 
 # Misc local files
 *.local

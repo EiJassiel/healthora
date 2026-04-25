@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import type { CSSProperties } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import type { CSSProperties, HTMLAttributes, ReactNode } from 'react';
 import type { Product, Category } from '../types';
 import { ProductCard } from '../components/shared/ProductCard';
 import { ProductImage } from '../components/shared/ProductImage';
@@ -27,6 +27,61 @@ const headKicker: CSSProperties = { fontFamily: '"JetBrains Mono", monospace', f
 const headTitle: CSSProperties = { fontFamily: '"Instrument Serif", serif', fontSize: 56, letterSpacing: '-0.035em', lineHeight: 1, color: 'var(--ink)', margin: 0, fontWeight: 400 };
 const seeAllLink: CSSProperties = { fontSize: 13, fontFamily: '"Geist", sans-serif', color: 'var(--ink)', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6, padding: '10px 18px', borderRadius: 999, border: '1px solid var(--ink-20)' };
 
+interface RevealSectionProps extends HTMLAttributes<HTMLElement> {
+  children: ReactNode;
+  delay?: number;
+}
+
+function RevealSection({ children, style, delay = 0, ...props }: RevealSectionProps) {
+  const ref = useRef<HTMLElement | null>(null);
+  const [isVisible, setIsVisible] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const mediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+    if (mediaQuery.matches) {
+      setIsVisible(true);
+      return;
+    }
+
+    const node = ref.current;
+    if (!node) return;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (!entry.isIntersecting) return;
+        setIsVisible(true);
+        observer.disconnect();
+      },
+      {
+        threshold: 0.18,
+        rootMargin: '0px 0px -8% 0px',
+      }
+    );
+
+    observer.observe(node);
+
+    return () => observer.disconnect();
+  }, []);
+
+  return (
+    <section
+      ref={ref}
+      {...props}
+      style={{
+        ...style,
+        opacity: isVisible ? 1 : 0,
+        transform: isVisible ? 'translateY(0)' : 'translateY(28px)',
+        transition: `opacity 760ms cubic-bezier(.2,.8,.2,1) ${delay}ms, transform 760ms cubic-bezier(.2,.8,.2,1) ${delay}ms`,
+        willChange: 'opacity, transform',
+      }}
+    >
+      {children}
+    </section>
+  );
+}
+
 export function Landing({ onNav, onOpenProduct, onAdd }: LandingProps) {
   const { data: products = [] } = useProducts();
   const { data: categories = [] } = useCategories();
@@ -40,7 +95,13 @@ export function Landing({ onNav, onOpenProduct, onAdd }: LandingProps) {
   };
 
   const bestSellers = products.filter((p) => p.tag === 'Best seller').slice(0, 4);
-  const featured = products.slice(4, 8);
+  const featured = [...products]
+    .sort((a, b) => {
+      const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      return bTime - aTime;
+    })
+    .slice(0, 4);
   const donnaBornInRoma = products.find((p) => p.id === 'valentino-donna-born-in-roma-eau-de-parfum');
   const goodGirl = products.find((p) => p.id === 'carolina-herrera-good-girl-eau-de-parfum');
   
@@ -67,7 +128,7 @@ export function Landing({ onNav, onOpenProduct, onAdd }: LandingProps) {
   return (
     <main>
       {/* HERO */}
-      <section style={{ padding: '32px 40px 0' }}>
+      <RevealSection style={{ padding: '32px 40px 0' }}>
         <div style={{ borderRadius: 32, overflow: 'hidden', background: 'linear-gradient(120deg, oklch(0.28 0.055 155) 0%, oklch(0.32 0.06 155) 38%, oklch(0.4 0.065 155) 100%)', color: 'var(--cream)', display: 'grid', gridTemplateColumns: '1.15fr 1fr', minHeight: 560, position: 'relative' }}>
           <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', background: 'radial-gradient(95% 90% at 84% 24%, rgba(183, 239, 221, 0.12) 0%, rgba(183, 239, 221, 0) 52%), radial-gradient(70% 70% at 8% 92%, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0) 56%)' }} />
           <div style={{ padding: '64px 72px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', position: 'relative', zIndex: 2 }}>
@@ -155,9 +216,11 @@ export function Landing({ onNav, onOpenProduct, onAdd }: LandingProps) {
                       zIndex: pose.z,
                     }}
                   >
-                    <div style={{ animation: index % 2 === 0 ? 'heroFloatA 7.5s ease-in-out infinite' : 'heroFloatB 8.5s ease-in-out infinite' }}>
-                      <div style={{ background: 'rgba(255,255,255,0.985)', borderRadius: 20, padding: 14, boxShadow: cardShadow, border: '1px solid rgba(255,255,255,0.6)' }}>
-                        <ProductImage product={product} size="md" />
+                    <div style={{ opacity: 0, animation: `heroCardIn 720ms cubic-bezier(.18,.88,.24,1) ${120 + index * 90}ms forwards` }}>
+                      <div style={{ animation: index % 2 === 0 ? 'heroFloatA 7.5s ease-in-out infinite' : 'heroFloatB 8.5s ease-in-out infinite' }}>
+                        <div style={{ background: 'rgba(255,255,255,0.985)', borderRadius: 20, padding: 14, boxShadow: cardShadow, border: '1px solid rgba(255,255,255,0.6)' }}>
+                          <ProductImage product={product} size="md" />
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -167,6 +230,10 @@ export function Landing({ onNav, onOpenProduct, onAdd }: LandingProps) {
             </div>
           </div>
           <style>{`
+            @keyframes heroCardIn {
+              0% { opacity: 0; transform: translateY(28px) scale(0.9); }
+              100% { opacity: 1; transform: translateY(0) scale(1); }
+            }
             @keyframes heroFloatA {
               0%, 100% { transform: rotate(-8deg) translateY(0); }
               50% { transform: rotate(-5deg) translateY(-8px); }
@@ -177,10 +244,10 @@ export function Landing({ onNav, onOpenProduct, onAdd }: LandingProps) {
             }
           `}</style>
         </div>
-      </section>
+      </RevealSection>
 
       {/* CATEGORIES */}
-      <section id="categorias" style={{ padding: '80px 40px 0' }}>
+      <RevealSection id="categorias" style={{ padding: '80px 40px 0' }} delay={40}>
         <div style={{ display: 'flex', alignItems: 'end', justifyContent: 'space-between', marginBottom: 32 }}>
           <div>
             <div style={headKicker}>01 · Categorías</div>
@@ -201,10 +268,10 @@ export function Landing({ onNav, onOpenProduct, onAdd }: LandingProps) {
             </div>
           ))}
         </div>
-      </section>
+      </RevealSection>
 
       {/* BEST SELLERS */}
-      <section id="bestsellers" style={{ padding: '80px 40px 0' }}>
+      <RevealSection id="bestsellers" style={{ padding: '80px 40px 0' }} delay={60}>
         <div style={{ display: 'flex', alignItems: 'end', justifyContent: 'space-between', marginBottom: 32 }}>
           <div>
             <div style={headKicker}>02 · Best sellers</div>
@@ -215,10 +282,10 @@ export function Landing({ onNav, onOpenProduct, onAdd }: LandingProps) {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 20 }}>
           {bestSellers.map((p) => <ProductCard key={p.id} product={p} onClick={onOpenProduct} onAdd={onAdd} />)}
         </div>
-      </section>
+      </RevealSection>
 
       {/* PROMO BAND */}
-      <section id="ofertas" style={{ padding: '80px 40px 0' }}>
+      <RevealSection id="ofertas" style={{ padding: '80px 40px 0' }} delay={80}>
         <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 16 }}>
           <div style={{ background: 'var(--lime)', borderRadius: 28, padding: 56, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', minHeight: 360, position: 'relative', overflow: 'hidden' }}>
             <div style={{ maxWidth: 420 }}>
@@ -241,10 +308,10 @@ export function Landing({ onNav, onOpenProduct, onAdd }: LandingProps) {
             <Button variant="primary" full>Unirme al club</Button>
           </div>
         </div>
-      </section>
+      </RevealSection>
 
       {/* BY NEED */}
-      <section style={{ padding: '80px 40px 0' }}>
+      <RevealSection style={{ padding: '80px 40px 0' }} delay={100}>
         <div style={{ marginBottom: 32 }}>
           <div style={headKicker}>03 · Por necesidad</div>
           <h2 style={headTitle}>¿Qué estás <em style={{ color: 'var(--green)' }}>buscando</em>?</h2>
@@ -282,10 +349,10 @@ export function Landing({ onNav, onOpenProduct, onAdd }: LandingProps) {
             </div>
           ))}
         </div>
-      </section>
+      </RevealSection>
 
       {/* TRUST */}
-      <section style={{ padding: '80px 40px 0' }}>
+      <RevealSection style={{ padding: '80px 40px 0' }} delay={120}>
         <div style={{ background: 'var(--cream-2)', borderRadius: 28, padding: '48px 40px', display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 32, border: '1px solid var(--ink-06)' }}>
           {[{ icon: 'shield', title: 'Pagos seguros', sub: 'Stripe · PCI DSS · 3D Secure' }, { icon: 'check', title: 'Productos verificados', sub: 'Farmacéuticos colegiados' }, { icon: 'truck', title: 'Envíos rápidos', sub: '24–48h en toda la región' }, { icon: 'headset', title: 'Atención al cliente', sub: 'Lun a sáb · 8am–8pm' }].map((t) => (
             <div key={t.title} style={{ display: 'flex', gap: 14 }}>
@@ -297,10 +364,10 @@ export function Landing({ onNav, onOpenProduct, onAdd }: LandingProps) {
             </div>
           ))}
         </div>
-      </section>
+      </RevealSection>
 
       {/* FEATURED */}
-      <section id="nuevos" style={{ padding: '80px 40px 0' }}>
+      <RevealSection id="nuevos" style={{ padding: '80px 40px 0' }} delay={140}>
         <div style={{ display: 'flex', alignItems: 'end', justifyContent: 'space-between', marginBottom: 32 }}>
           <div>
             <div style={headKicker}>04 · Nuevos ingresos</div>
@@ -311,7 +378,7 @@ export function Landing({ onNav, onOpenProduct, onAdd }: LandingProps) {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 20 }}>
           {featured.map((p) => <ProductCard key={p.id} product={p} onClick={onOpenProduct} onAdd={onAdd} />)}
         </div>
-      </section>
+      </RevealSection>
     </main>
   );
 }

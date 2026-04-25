@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import type { CSSProperties } from 'react';
 import type { Product } from '../types';
 import { ProductCard } from '../components/shared/ProductCard';
@@ -40,6 +40,13 @@ export function Catalog({ initialFilter, onOpenProduct, onAdd }: CatalogProps) {
   useEffect(() => {
     setPage(1);
   }, [cat, need, search, sort, priceMax, brands, inStock]);
+
+  const gridRef = useRef<HTMLDivElement>(null);
+
+  function changePage(newPage: number) {
+    setPage(newPage);
+    gridRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
 
   const allBrands = [...new Set(allProducts.map((p) => p.brand))].sort((a, b) => a.localeCompare(b));
   const brandCounts = useMemo(
@@ -101,7 +108,7 @@ export function Catalog({ initialFilter, onOpenProduct, onAdd }: CatalogProps) {
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '260px 1fr', gap: 32 }}>
+      <div ref={gridRef} style={{ display: 'grid', gridTemplateColumns: '260px 1fr', gap: 32 }}>
         <aside style={{ position: 'sticky', top: 100, alignSelf: 'start' }}>
           <div style={{ marginBottom: 32 }}>
             <div style={filterLabel}>Categorías</div>
@@ -153,6 +160,11 @@ export function Catalog({ initialFilter, onOpenProduct, onAdd }: CatalogProps) {
                   aria-label="Buscar marca"
                   style={{ width: '100%', border: 'none', outline: 'none', background: 'transparent', color: 'var(--ink)', fontSize: 13, fontFamily: '"Geist", sans-serif' }}
                 />
+                {brandSearch && (
+                  <button onClick={() => setBrandSearch('')} style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: '2px 4px', display: 'flex', alignItems: 'center', color: 'var(--ink-40)', borderRadius: 4 }}>
+                    <Icon name="x" size={13} />
+                  </button>
+                )}
               </div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                 {visibleBrands.map((b) => {
@@ -238,7 +250,7 @@ export function Catalog({ initialFilter, onOpenProduct, onAdd }: CatalogProps) {
           {filtered.length > ITEMS_PER_PAGE && (
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 28, paddingTop: 20, borderTop: '1px solid var(--ink-06)' }}>
               <button
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                onClick={() => changePage(Math.max(1, currentPage - 1))}
                 disabled={currentPage === 1}
                 style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '10px 14px', borderRadius: 999, border: '1px solid var(--ink-20)', background: 'transparent', color: currentPage === 1 ? 'var(--ink-40)' : 'var(--ink)', cursor: currentPage === 1 ? 'not-allowed' : 'pointer', fontFamily: '"Geist", sans-serif', fontSize: 13 }}
               >
@@ -252,7 +264,7 @@ export function Catalog({ initialFilter, onOpenProduct, onAdd }: CatalogProps) {
                     <div key={value} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                       {showGap && <span style={{ color: 'var(--ink-40)', fontFamily: '"JetBrains Mono", monospace' }}>...</span>}
                       <button
-                        onClick={() => setPage(value)}
+                        onClick={() => changePage(value)}
                         style={{ width: 40, height: 40, borderRadius: 999, border: value === currentPage ? '1px solid var(--green)' : '1px solid var(--ink-20)', background: value === currentPage ? 'var(--green)' : 'transparent', color: value === currentPage ? 'var(--cream)' : 'var(--ink)', cursor: 'pointer', fontFamily: '"Geist", sans-serif', fontSize: 13, fontWeight: value === currentPage ? 600 : 400 }}
                       >
                         {value}
@@ -262,7 +274,7 @@ export function Catalog({ initialFilter, onOpenProduct, onAdd }: CatalogProps) {
                 })}
               </div>
               <button
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                onClick={() => changePage(Math.min(totalPages, currentPage + 1))}
                 disabled={currentPage === totalPages}
                 style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '10px 14px', borderRadius: 999, border: '1px solid var(--ink-20)', background: 'transparent', color: currentPage === totalPages ? 'var(--ink-40)' : 'var(--ink)', cursor: currentPage === totalPages ? 'not-allowed' : 'pointer', fontFamily: '"Geist", sans-serif', fontSize: 13 }}
               >

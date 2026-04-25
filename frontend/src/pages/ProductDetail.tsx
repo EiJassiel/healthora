@@ -11,13 +11,14 @@ import { useProducts } from '../hooks/useProducts';
 interface ProductDetailProps {
   product: Product;
   onAdd: (p: Product, qty: number) => void;
+  onBuyNow: (p: Product, qty: number) => void;
   onOpenProduct: (p: Product) => void;
   onBack: () => void;
 }
 
 const qtyBtn: CSSProperties = { width: 36, height: 36, borderRadius: 999, border: 'none', background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' };
 
-export function ProductDetail({ product, onAdd, onOpenProduct, onBack }: ProductDetailProps) {
+export function ProductDetail({ product, onAdd, onBuyNow, onOpenProduct, onBack }: ProductDetailProps) {
   const [qty, setQty] = useState(1);
   const [tab, setTab] = useState('benefits');
   const [added, setAdded] = useState(false);
@@ -101,7 +102,7 @@ export function ProductDetail({ product, onAdd, onOpenProduct, onBack }: Product
             style={{ background: hasRealImages ? 'white' : product.color, borderRadius: 28, padding: 40, minHeight: 620, display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', overflow: 'hidden', border: hasRealImages ? '1px solid var(--ink-06)' : 'none', cursor: 'zoom-in' }}
           >
             <div style={{ position: 'absolute', top: 24, left: 24, fontFamily: '"JetBrains Mono", monospace', fontSize: 10, color: 'var(--ink-60)', letterSpacing: '0.12em', zIndex: 2 }}>{String(activeImageIndex + 1).padStart(2, '0')} / 04 · PRODUCT SHOT</div>
-            <div style={{ animation: 'fadeInImage 0.4s ease-out', key: activeImage, width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <div key={activeImage} style={{ animation: 'fadeInImage 0.4s ease-out', width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <ProductImage product={product} size="lg" imageUrl={activeImage} alt={gallery[activeImageIndex]?.alt} />
             </div>
             <style>{`@keyframes fadeInImage { from { opacity: 0.4; transform: scale(0.97); } to { opacity: 1; transform: scale(1); } }`}</style>
@@ -142,10 +143,17 @@ export function ProductDetail({ product, onAdd, onOpenProduct, onBack }: Product
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24 }}>
             <Stars value={product.rating} size={14} />
             <span style={{ fontSize: 13, color: 'var(--ink-60)', fontFamily: '"Geist", sans-serif' }}>{product.rating} ({product.reviews} reseñas)</span>
-            <span style={{ fontSize: 12, fontFamily: '"JetBrains Mono", monospace', color: 'var(--green)', display: 'flex', alignItems: 'center', gap: 6 }}>
-              <span style={{ width: 6, height: 6, background: 'var(--green)', borderRadius: 999 }} />
-              EN STOCK · {product.stock} unidades
-            </span>
+            {product.stock === 0 ? (
+              <span style={{ fontSize: 12, fontFamily: '"JetBrains Mono", monospace', color: 'oklch(0.5 0.15 30)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ width: 6, height: 6, background: 'oklch(0.5 0.15 30)', borderRadius: 999 }} />
+                AGOTADO
+              </span>
+            ) : (
+              <span style={{ fontSize: 12, fontFamily: '"JetBrains Mono", monospace', color: 'var(--green)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ width: 6, height: 6, background: 'var(--green)', borderRadius: 999 }} />
+                EN STOCK · {product.stock} unidades
+              </span>
+            )}
           </div>
 
           <p style={{ fontSize: 17, lineHeight: 1.55, color: 'var(--ink-80)', marginBottom: 32, maxWidth: 480 }}>{product.short}</p>
@@ -161,16 +169,16 @@ export function ProductDetail({ product, onAdd, onOpenProduct, onBack }: Product
           </div>
 
           <div style={{ display: 'flex', gap: 12, alignItems: 'stretch', marginBottom: 16 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 4, border: '1px solid var(--ink-20)', borderRadius: 999, padding: 4 }}>
-              <button onClick={() => setQty((q) => Math.max(1, q - 1))} style={qtyBtn}><Icon name="minus" size={14} /></button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4, border: '1px solid var(--ink-20)', borderRadius: 999, padding: 4, opacity: product.stock === 0 ? 0.4 : 1 }}>
+              <button onClick={() => setQty((q) => Math.max(1, q - 1))} style={qtyBtn} disabled={product.stock === 0 || qty <= 1}><Icon name="minus" size={14} /></button>
               <span style={{ width: 40, textAlign: 'center', fontFamily: '"Geist", sans-serif', fontSize: 15 }}>{qty}</span>
-              <button onClick={() => setQty((q) => q + 1)} style={qtyBtn}><Icon name="plus" size={14} /></button>
+              <button onClick={() => setQty((q) => Math.min(product.stock, q + 1))} style={qtyBtn} disabled={product.stock === 0 || qty >= product.stock}><Icon name="plus" size={14} /></button>
             </div>
-            <Button variant="primary" size="lg" onClick={handleAdd} style={{ flex: 1 }}>
-              {added ? '✓ Agregado al carrito' : `Agregar al carrito · $${(product.price * qty).toFixed(2)}`}
+            <Button variant="primary" size="lg" onClick={handleAdd} disabled={product.stock === 0} style={{ flex: 1 }}>
+              {product.stock === 0 ? 'Sin stock' : added ? '✓ Agregado al carrito' : `Agregar al carrito · $${(product.price * qty).toFixed(2)}`}
             </Button>
           </div>
-          <Button variant="outline" full>Comprar ahora con un clic</Button>
+          <Button variant="outline" full onClick={() => onBuyNow(product, qty)} disabled={product.stock === 0}>Comprar ahora con un clic</Button>
 
           <div style={{ marginTop: 24, background: 'var(--cream-2)', borderRadius: 16, padding: 16, display: 'flex', flexDirection: 'column', gap: 10, border: '1px solid var(--ink-06)' }}>
             {[{ icon: 'truck', t: 'Envío gratis en órdenes sobre $50' }, { icon: 'shield', t: 'Pago seguro con Stripe · 3D Secure' }, { icon: 'check', t: 'Productos verificados por farmacéuticos' }].map((row) => (

@@ -17,6 +17,16 @@ const OrderSchema = new Schema(
     tax: Number,
     shipping: Number,
     total: Number,
+    paymentStatus: {
+      type: String,
+      enum: ['pending_payment', 'paid', 'cancelled', 'refunded'],
+      default: 'pending_payment',
+    },
+    fulfillmentStatus: {
+      type: String,
+      enum: ['unfulfilled', 'processing', 'shipped', 'delivered', 'cancelled'],
+      default: 'unfulfilled',
+    },
     status: {
       type: String,
       enum: ['pending_payment', 'paid', 'processing', 'shipped', 'delivered', 'cancelled', 'refunded'],
@@ -37,5 +47,7 @@ const OrderSchema = new Schema(
 
 OrderSchema.index({ customerId: 1, createdAt: -1 });
 OrderSchema.index({ status: 1, createdAt: -1 });
+OrderSchema.index({ paymentStatus: 1, createdAt: -1 });
+OrderSchema.index({ fulfillmentStatus: 1, createdAt: -1 });
 
 export const Order = model('Order', OrderSchema);

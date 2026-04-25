@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { type ChangeEvent, type CSSProperties, type DragEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth, useClerk, useUser } from '@clerk/clerk-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Sidebar, KpiCard, PageHeader, Card, LineChart, BarChart, StatusPill, tableStyle, th, td, trStyle, iconBtnAd } from '../../components/admin';
@@ -6,14 +6,10 @@ import { ProductImage } from '../../components/shared/ProductImage';
 import { Button } from '../../components/shared/Button';
 import { Icon } from '../../components/shared/Icon';
 import { api } from '../../lib/api';
-import type { Product } from '../../types';
+import type { FulfillmentStatus, OrderAddress, OrderLineItem, PaymentStatus, Product } from '../../types';
 
 type AdminPage = 'dashboard' | 'orders' | 'products' | 'users' | 'sales' | 'earnings';
-
-interface AdminAppProps {
-  onGoToStore: () => void;
-}
-
+interface AdminAppProps { onGoToStore: () => void; }
 type AdminAccess = { allowed: boolean; role: string; name?: string; email?: string };
 type DashboardData = {
   kpis: { revenue: number; revenueDelta: number; totalOrders: number; monthOrders: number; totalUsers: number; lowStock: number };
@@ -21,22 +17,321 @@ type DashboardData = {
   recentOrders: AdminOrder[];
   lowStockProducts: Product[];
 };
-type AdminOrder = { _id: string; customerName?: string; customerEmail?: string; items?: unknown[]; total?: number; status?: string; createdAt?: string };
+type AdminOrder = { _id: string; customerName?: string; customerEmail?: string; items?: OrderLineItem[]; total?: number; status?: string; paymentStatus?: PaymentStatus; fulfillmentStatus?: FulfillmentStatus; address?: OrderAddress; createdAt?: string };
 type AdminUser = { _id: string; name?: string; email?: string; role?: 'customer' | 'admin'; orderCount?: number; ltv?: number; createdAt?: string };
-type SalesData = { daily?: { revenue: number; date: string }[]; byCategory?: { productId: string; name: string; category: string; revenue: number; units: number }[]; topProducts?: { _id: string; revenue: number; units: number }[] };
+type SalesData = { daily?: { revenue: number; date: string }[]; byCategory?: { productId: string; name: string; category: string; revenue: number; units: number }[]; topProducts?: { _id: string; revenue: number; units: number }[]; topCategories?: { _id: string; units: number; revenue: number }[]; topBrands?: { _id: string; units: number; revenue: number }[] };
 type EarningsData = { monthly?: { month: string; revenue: number; orders: number }[]; summary?: { gross: number; tax: number; shipping: number; fees: number; net: number; orders: number } };
 
-const statusOptions = ['paid', 'processing', 'shipped', 'delivered', 'pending_payment', 'cancelled', 'refunded'];
-const statusLabels: Record<string, string> = {
-  '': 'Todas',
-  paid: 'Pagada',
-  processing: 'En preparación',
+const fulfillmentStatusOptions: (FulfillmentStatus | '')[] = ['', 'unfulfilled', 'processing', 'shipped', 'delivered'];
+const fulfillmentStatusLabels: Record<FulfillmentStatus | '', string> = {
+  '': 'Todos',
+  unfulfilled: 'Pendiente',
+  processing: 'Preparando',
   shipped: 'Enviada',
   delivered: 'Entregada',
-  pending_payment: 'Pendiente',
   cancelled: 'Cancelada',
-  refunded: 'Reembolsada',
 };
+
+// ─── ProductForm ─────────────────────────────────────────────────────────────
+
+type ProductForm = {
+  name: string; brand: string; category: string; need: string; short: string;
+  price: string; priceBefore: string; tag: string; stock: string; active: boolean;
+  benefits: string; usage: string; ingredients: string; warnings: string;
+  imageUrl: string; image2: string; image3: string; image4: string;
+  color: string; swatchColor: string; label: string;
+};
+
+const emptyForm: ProductForm = {
+  name: '', brand: '', category: '', need: '', short: '',
+  price: '0', priceBefore: '', tag: '', stock: '0', active: true,
+  benefits: '', usage: '', ingredients: '', warnings: '',
+  imageUrl: '', image2: '', image3: '', image4: '',
+  color: 'oklch(0.92 0.1 140)', swatchColor: 'oklch(0.6 0.15 140)', label: '',
+};
+
+function normalizeTag(tag: string) {
+  const normalized = tag.trim().toLowerCase().replace(/\s+/g, ' ');
+  if (!normalized) return '';
+  if (normalized === 'best seller' || normalized === 'bestseller') return 'Best seller';
+  if (normalized === 'nuevo') return 'Nuevo';
+  if (normalized === 'premium') return 'Premium';
+  if (normalized === 'oferta') return 'Oferta';
+  return tag.trim();
+}
+
+function productToForm(p: Product): ProductForm {
+  return {
+    name: p.name, brand: p.brand, category: p.category, need: p.need || '', short: p.short || '',
+    price: String(p.price), priceBefore: p.priceBefore ? String(p.priceBefore) : '',
+    tag: p.tag || '', stock: String(p.stock), active: p.active,
+    benefits: (p.benefits || []).join('\n'), usage: p.usage || '',
+    ingredients: p.ingredients || '', warnings: p.warnings || '',
+    imageUrl: p.imageUrl || p.images?.[0]?.url || '',
+    image2: p.images?.[1]?.url || '', image3: p.images?.[2]?.url || '', image4: p.images?.[3]?.url || '',
+    color: p.color || 'oklch(0.92 0.1 140)', swatchColor: p.swatchColor || 'oklch(0.6 0.15 140)',
+    label: p.label || '',
+  };
+}
+
+function slugify(text: string) {
+  return text.trim().toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '').replace(/-+/g, '-').replace(/^-|-$/g, '');
+}
+
+function formToPayload(f: ProductForm): Partial<Product> {
+  const allImages: NonNullable<Product['images']> = [];
+  if (f.imageUrl) allImages.push({ url: f.imageUrl, isPrimary: true });
+  if (f.image2) allImages.push({ url: f.image2 });
+  if (f.image3) allImages.push({ url: f.image3 });
+  if (f.image4) allImages.push({ url: f.image4 });
+  return {
+    id: slugify(f.name),
+    name: f.name.trim(), brand: f.brand.trim(), category: f.category.trim(), need: f.need.trim(),
+    short: f.short.trim(), price: parseFloat(f.price) || 0,
+    ...(f.priceBefore ? { priceBefore: parseFloat(f.priceBefore) } : {}),
+    ...(f.tag ? { tag: normalizeTag(f.tag) } : {}),
+    stock: parseInt(f.stock) || 0, active: f.active,
+    benefits: f.benefits.split('\n').map(b => b.trim()).filter(Boolean),
+    usage: f.usage.trim(), ingredients: f.ingredients.trim(), warnings: f.warnings.trim(),
+    ...(f.imageUrl ? { imageUrl: f.imageUrl } : {}),
+    images: allImages,
+    color: f.color, swatchColor: f.swatchColor, label: f.label.trim(),
+    rating: 0, reviews: 0,
+  };
+}
+
+// ─── ImageDropZone ────────────────────────────────────────────────────────────
+
+function ImageDropZone({ value, onChange, label }: { value: string; onChange: (v: string) => void; label: string }) {
+  const [dragging, setDragging] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const processFile = (file: File) => {
+    if (!file.type.startsWith('image/')) return;
+    const reader = new FileReader();
+    reader.onload = e => onChange(e.target?.result as string);
+    reader.readAsDataURL(file);
+  };
+
+  const onDrop = (e: DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setDragging(false);
+    const file = e.dataTransfer.files[0];
+    if (file) processFile(file);
+  };
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column' }}>
+      <span style={{ fontSize: 10, fontFamily: '"JetBrains Mono", monospace', textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--ink-60)', marginBottom: 6 }}>{label}</span>
+      <div
+        onDragOver={e => { e.preventDefault(); setDragging(true); }}
+        onDragLeave={() => setDragging(false)}
+        onDrop={onDrop}
+        onClick={() => !value && inputRef.current?.click()}
+        style={{ border: `2px dashed ${dragging ? 'var(--green)' : value ? 'var(--ink-12)' : 'var(--ink-20)'}`, borderRadius: 12, height: 130, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: value ? 'default' : 'pointer', background: dragging ? 'oklch(0.97 0.02 140)' : 'var(--cream-2)', position: 'relative', overflow: 'hidden', transition: 'border-color 120ms, background 120ms' }}
+      >
+        {value ? (
+          <>
+            <img src={value} alt="" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', padding: 10 }} />
+            <button
+              onClick={e => { e.stopPropagation(); onChange(''); }}
+              style={{ position: 'absolute', top: 6, right: 6, width: 22, height: 22, borderRadius: 999, background: 'var(--ink)', color: 'var(--cream)', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0.75 }}
+            >
+              <Icon name="x" size={11} />
+            </button>
+            <button
+              onClick={e => { e.stopPropagation(); inputRef.current?.click(); }}
+              style={{ position: 'absolute', bottom: 6, right: 6, padding: '3px 8px', borderRadius: 6, background: 'var(--ink)', color: 'var(--cream)', border: 'none', cursor: 'pointer', fontSize: 10, fontFamily: '"JetBrains Mono", monospace', opacity: 0.7 }}
+            >
+              cambiar
+            </button>
+          </>
+        ) : (
+          <div style={{ textAlign: 'center', color: 'var(--ink-40)', pointerEvents: 'none' }}>
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginBottom: 8 }}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            <div style={{ fontSize: 10, fontFamily: '"JetBrains Mono", monospace', letterSpacing: '0.08em' }}>ARRASTRA O HAZ CLIC</div>
+          </div>
+        )}
+        <input ref={inputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={e => { const f = e.target.files?.[0]; if (f) processFile(f); e.target.value = ''; }} />
+      </div>
+    </div>
+  );
+}
+
+// ─── ProductModal ─────────────────────────────────────────────────────────────
+
+function ProductModal({ mode, product, categories, onClose, onSave, saving, error }: {
+  mode: 'add' | 'edit';
+  product?: Product;
+  categories: string[];
+  onClose: () => void;
+  onSave: (data: Partial<Product>) => void;
+  saving: boolean;
+  error?: string | null;
+}) {
+  const [form, setForm] = useState<ProductForm>(() => product ? productToForm(product) : { ...emptyForm });
+  const [validationError, setValidationError] = useState('');
+
+  const setF = (key: keyof ProductForm) => (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
+    setForm(prev => ({ ...prev, [key]: e.target.value }));
+  const setSelect = (key: keyof ProductForm) => (e: ChangeEvent<HTMLSelectElement>) =>
+    setForm(prev => ({ ...prev, [key]: e.target.value }));
+  const setChk = (key: keyof ProductForm) => (e: ChangeEvent<HTMLInputElement>) =>
+    setForm(prev => ({ ...prev, [key]: e.target.checked }));
+  const setImg = (key: keyof ProductForm) => (v: string) =>
+    setForm(prev => ({ ...prev, [key]: v }));
+
+  const handleSave = () => {
+    if (!form.name.trim()) { setValidationError('El nombre es obligatorio.'); return; }
+    if (!form.brand.trim()) { setValidationError('La marca es obligatoria.'); return; }
+    if (!form.category.trim()) { setValidationError('La categoría es obligatoria.'); return; }
+    if (!form.need.trim()) { setValidationError('La necesidad es obligatoria.'); return; }
+    if (!form.short.trim()) { setValidationError('La descripción corta es obligatoria.'); return; }
+    if ((parseFloat(form.price) || 0) <= 0) { setValidationError('El precio debe ser mayor a 0.'); return; }
+    if ((parseInt(form.stock) || 0) <= 0) { setValidationError('El stock debe ser mayor a 0.'); return; }
+    if (!form.imageUrl.trim()) { setValidationError('La imagen 1 es obligatoria.'); return; }
+    setValidationError('');
+    onSave(formToPayload(form));
+  };
+
+  const inputS: CSSProperties = { width: '100%', padding: '10px 12px', borderRadius: 10, border: '1px solid var(--ink-20)', background: 'var(--cream-2)', fontSize: 13, fontFamily: '"Geist", sans-serif', color: 'var(--ink)', boxSizing: 'border-box', outline: 'none' };
+  const labelS: CSSProperties = { fontSize: 10, fontFamily: '"JetBrains Mono", monospace', textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--ink-60)', marginBottom: 6, display: 'block' };
+  const fieldS: CSSProperties = { display: 'flex', flexDirection: 'column' };
+  const sectionS: CSSProperties = { fontSize: 10, fontFamily: '"JetBrains Mono", monospace', textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--ink-60)', marginBottom: 16 };
+  const dividerS: CSSProperties = { height: 1, background: 'var(--ink-06)', margin: '22px 0' };
+
+  return (
+    <div
+      style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}
+      onClick={onClose}
+    >
+      <div
+        style={{ background: 'var(--cream)', borderRadius: 20, border: '1px solid var(--ink-06)', width: '100%', maxWidth: 720, maxHeight: '92vh', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '22px 28px', borderBottom: '1px solid var(--ink-06)', flexShrink: 0 }}>
+          <div>
+            <div style={{ fontSize: 10, fontFamily: '"JetBrains Mono", monospace', textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--ink-60)', marginBottom: 4 }}>
+              {mode === 'add' ? 'Nuevo producto' : 'Editar producto'}
+            </div>
+            <h2 style={{ fontFamily: '"Instrument Serif", serif', fontSize: 28, margin: 0, fontWeight: 400, letterSpacing: '-0.02em' }}>
+              {mode === 'add' ? <>Agregar <em style={{ color: 'var(--green)' }}>producto</em></> : form.name || 'Editar'}
+            </h2>
+          </div>
+          <button onClick={onClose} style={{ width: 36, height: 36, borderRadius: 999, border: '1px solid var(--ink-06)', background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Icon name="x" size={16} />
+          </button>
+        </div>
+
+        {/* Body */}
+        <div style={{ flex: 1, overflowY: 'auto', padding: 28 }}>
+
+          {/* Información básica */}
+          <div style={sectionS}>Información básica</div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
+            <div style={fieldS}><label style={labelS}>Nombre</label><input style={inputS} value={form.name} onChange={setF('name')} placeholder="Nombre del producto" /></div>
+            <div style={fieldS}><label style={labelS}>Marca</label><input style={inputS} value={form.brand} onChange={setF('brand')} placeholder="Nombre de la marca" /></div>
+            <div style={fieldS}>
+              <label style={labelS}>Categoría</label>
+              <select
+                style={{ ...inputS, appearance: 'none', backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 12px center', paddingRight: 32, cursor: 'pointer' }}
+                value={form.category}
+                onChange={e => setForm(prev => ({ ...prev, category: e.target.value }))}
+              >
+                <option value="">Seleccionar categoría…</option>
+                {categories.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+            <div style={fieldS}><label style={labelS}>Necesidad</label><input style={inputS} value={form.need} onChange={setF('need')} placeholder="ej: Inmunidad, Energía" /></div>
+          </div>
+          <div style={fieldS}>
+            <label style={labelS}>Descripción corta</label>
+            <textarea style={{ ...inputS, resize: 'vertical', minHeight: 68 }} value={form.short} onChange={setF('short')} placeholder="Breve descripción del producto…" />
+          </div>
+
+          <div style={dividerS} />
+
+          {/* Precio & Inventario */}
+          <div style={sectionS}>Precio · Inventario</div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: 16, marginBottom: 16, alignItems: 'end' }}>
+            <div style={fieldS}><label style={labelS}>Precio ($)</label><input style={inputS} type="number" value={form.price} onChange={setF('price')} min={0} step={0.01} /></div>
+            <div style={fieldS}><label style={labelS}>Stock</label><input style={inputS} type="number" value={form.stock} onChange={setF('stock')} min={0} /></div>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, paddingBottom: 12, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+              <input type="checkbox" checked={form.active} onChange={setChk('active')} style={{ width: 16, height: 16, accentColor: 'var(--green)', cursor: 'pointer' }} />
+              <span style={{ fontSize: 13, fontFamily: '"Geist", sans-serif' }}>Activo</span>
+            </label>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 16 }}>
+            <div style={fieldS}>
+              <label style={labelS}>Tag</label>
+              <select
+                style={{ ...inputS, appearance: 'none', backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 12px center', paddingRight: 32, cursor: 'pointer' }}
+                value={form.tag}
+                onChange={setSelect('tag')}
+              >
+                <option value="">Sin tag</option>
+                <option value="Best seller">Best seller</option>
+                <option value="Nuevo">Nuevo</option>
+                <option value="Premium">Premium</option>
+                <option value="Oferta">Oferta</option>
+              </select>
+            </div>
+          </div>
+
+          <div style={dividerS} />
+
+          {/* Imágenes */}
+          <div style={sectionS}>Imágenes del producto</div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+            <ImageDropZone value={form.imageUrl} onChange={setImg('imageUrl')} label="Imagen 1 · principal" />
+            <ImageDropZone value={form.image2} onChange={setImg('image2')} label="Imagen 2 · opcional" />
+            <ImageDropZone value={form.image3} onChange={setImg('image3')} label="Imagen 3 · opcional" />
+            <ImageDropZone value={form.image4} onChange={setImg('image4')} label="Imagen 4 · opcional" />
+          </div>
+
+          <div style={dividerS} />
+
+          {/* Detalles */}
+          <div style={sectionS}>Detalles del producto</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <div style={fieldS}>
+              <label style={labelS}>Beneficios <span style={{ fontFamily: '"Geist", sans-serif', textTransform: 'none', letterSpacing: 0, fontWeight: 400 }}>(uno por línea)</span></label>
+              <textarea style={{ ...inputS, resize: 'vertical', minHeight: 88 }} value={form.benefits} onChange={setF('benefits')} placeholder={"Mejora el sistema inmune\nAumenta la energía\nReduce el estrés"} />
+            </div>
+            <div style={fieldS}>
+              <label style={labelS}>Modo de uso</label>
+              <textarea style={{ ...inputS, resize: 'vertical', minHeight: 68 }} value={form.usage} onChange={setF('usage')} placeholder="Tomar 1 cápsula al día con agua…" />
+            </div>
+            <div style={fieldS}>
+              <label style={labelS}>Ingredientes</label>
+              <textarea style={{ ...inputS, resize: 'vertical', minHeight: 68 }} value={form.ingredients} onChange={setF('ingredients')} placeholder="Vitamina C 500mg, Zinc 10mg…" />
+            </div>
+            <div style={fieldS}>
+              <label style={labelS}>Advertencias</label>
+              <textarea style={{ ...inputS, resize: 'vertical', minHeight: 68 }} value={form.warnings} onChange={setF('warnings')} placeholder="Mantener fuera del alcance de los niños…" />
+            </div>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div style={{ padding: '16px 28px', borderTop: '1px solid var(--ink-06)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexShrink: 0 }}>
+          <div style={{ fontSize: 12, color: 'oklch(0.5 0.15 30)', fontFamily: '"Geist", sans-serif', minHeight: 18 }}>
+            {validationError || error || ''}
+          </div>
+          <div style={{ display: 'flex', gap: 10 }}>
+            <Button variant="outline" onClick={onClose}>Cancelar</Button>
+            <Button variant="primary" onClick={handleSave} disabled={saving}>
+              {saving ? 'Guardando…' : mode === 'add' ? 'Agregar producto' : 'Guardar cambios'}
+            </Button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Auth helpers ─────────────────────────────────────────────────────────────
 
 function useAdminToken() {
   const { getToken } = useAuth();
@@ -46,6 +341,8 @@ function useAdminToken() {
     return token;
   };
 }
+
+// ─── AdminAccessGate ──────────────────────────────────────────────────────────
 
 function AdminAccessGate({ onGoToStore }: { onGoToStore: () => void }) {
   const getAdminToken = useAdminToken();
@@ -86,7 +383,7 @@ function AdminAccessGate({ onGoToStore }: { onGoToStore: () => void }) {
             <Icon name="shield" size={24} />
           </div>
           <h1 style={{ fontFamily: '"Instrument Serif", serif', fontSize: 48, lineHeight: 0.95, letterSpacing: '-0.035em', margin: 0, fontWeight: 400 }}>Acceso <em style={{ color: 'var(--coral)' }}>denegado</em></h1>
-          <p style={{ marginTop: 16, fontSize: 15, lineHeight: 1.6, color: 'var(--ink-60)' }}>Tu cuenta no tiene permisos de administrador. Si esta cuenta debería ser admin, agrégala en `ADMIN_EMAILS` del backend o asígnale el rol desde una cuenta admin existente.</p>
+          <p style={{ marginTop: 16, fontSize: 15, lineHeight: 1.6, color: 'var(--ink-60)' }}>Tu cuenta no tiene permisos de administrador.</p>
           <div style={{ marginTop: 24 }}><Button variant="outline" onClick={onGoToStore}>Volver a la tienda</Button></div>
         </div>
       </main>
@@ -96,13 +393,22 @@ function AdminAccessGate({ onGoToStore }: { onGoToStore: () => void }) {
   return <AdminPanel access={data} onGoToStore={onGoToStore} />;
 }
 
+// ─── AdminPanel ───────────────────────────────────────────────────────────────
+
 function AdminPanel({ access, onGoToStore }: { access: AdminAccess; onGoToStore: () => void }) {
   const getAdminToken = useAdminToken();
   const queryClient = useQueryClient();
   const [page, setPage] = useState<AdminPage>('dashboard');
-  const [orderFilter, setOrderFilter] = useState('');
-  const [editingProductId, setEditingProductId] = useState<string | null>(null);
-  const [productDrafts, setProductDrafts] = useState<Record<string, { price: number; stock: number; active: boolean }>>({});
+  const [orderFulfillmentFilter, setOrderFulfillmentFilter] = useState('');
+
+  // Products state
+  const [productModal, setProductModal] = useState<{ mode: 'add' | 'edit'; product?: Product } | null>(null);
+  const [productCatFilter, setProductCatFilter] = useState('Todos');
+  const [productSearch, setProductSearch] = useState('');
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [selectedProductIds, setSelectedProductIds] = useState<string[]>([]);
+  const [confirmBulkDelete, setConfirmBulkDelete] = useState<{ ids: string[]; title: string; description: string } | null>(null);
+  const [confirmUserDelete, setConfirmUserDelete] = useState<{ id: string; name: string } | null>(null);
 
   useEffect(() => {
     const saved = localStorage.getItem('healthora_admin_page') as AdminPage | null;
@@ -119,8 +425,8 @@ function AdminPanel({ access, onGoToStore }: { access: AdminAccess; onGoToStore:
     staleTime: 60000,
   });
   const ordersQuery = useQuery({
-    queryKey: ['admin-orders', orderFilter],
-    queryFn: async () => api.admin.orders(await getAdminToken(), orderFilter || undefined) as Promise<AdminOrder[]>,
+    queryKey: ['admin-orders', orderFulfillmentFilter],
+    queryFn: async () => api.admin.orders(await getAdminToken(), orderFulfillmentFilter || undefined) as Promise<AdminOrder[]>,
   });
   const productsQuery = useQuery({
     queryKey: ['admin-products'],
@@ -139,8 +445,9 @@ function AdminPanel({ access, onGoToStore }: { access: AdminAccess; onGoToStore:
     queryFn: async () => api.admin.earnings(await getAdminToken()) as Promise<EarningsData>,
   });
 
-  const orderStatusMutation = useMutation({
-    mutationFn: async ({ id, status }: { id: string; status: string }) => api.admin.patchOrderStatus(id, status, await getAdminToken()),
+  const orderStatusesMutation = useMutation({
+    mutationFn: async ({ id, paymentStatus, fulfillmentStatus }: { id: string; paymentStatus?: PaymentStatus; fulfillmentStatus?: FulfillmentStatus }) =>
+      api.admin.patchOrderStatuses(id, { paymentStatus, fulfillmentStatus }, await getAdminToken()),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['admin-orders'] });
       void queryClient.invalidateQueries({ queryKey: ['admin-dashboard'] });
@@ -148,15 +455,48 @@ function AdminPanel({ access, onGoToStore }: { access: AdminAccess; onGoToStore:
       void queryClient.invalidateQueries({ queryKey: ['admin-earnings'] });
     },
   });
-  const productMutation = useMutation({
-    mutationFn: async ({ mongoId, draft }: { mongoId: string; draft: { price: number; stock: number; active: boolean } }) =>
-      api.admin.products.update(mongoId, draft, await getAdminToken()),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['admin-products'] });
-      void queryClient.invalidateQueries({ queryKey: ['admin-dashboard'] });
-      setEditingProductId(null);
-    },
+
+  const invalidateProducts = () => {
+    void queryClient.invalidateQueries({ queryKey: ['admin-products'] });
+    void queryClient.invalidateQueries({ queryKey: ['products'] });
+    void queryClient.invalidateQueries({ queryKey: ['admin-dashboard'] });
+  };
+
+  const productUpdateMutation = useMutation({
+    mutationFn: async ({ mongoId, data }: { mongoId: string; data: Partial<Product> }) =>
+      api.admin.products.update(mongoId, data, await getAdminToken()),
+    onSuccess: () => { invalidateProducts(); setProductModal(null); },
   });
+
+  const productCreateMutation = useMutation({
+    mutationFn: async (data: Partial<Product>) =>
+      api.admin.products.create(data, await getAdminToken()),
+    onSuccess: () => { invalidateProducts(); setProductModal(null); },
+  });
+
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  const productDeleteMutation = useMutation({
+    mutationFn: async (mongoId: string) =>
+      api.admin.products.remove(mongoId, await getAdminToken()),
+    onSuccess: () => { invalidateProducts(); setConfirmDeleteId(null); setDeleteError(null); },
+    onError: (e: Error) => setDeleteError(e.message),
+  });
+
+  const bulkDeleteMutation = useMutation({
+    mutationFn: async (ids: string[]) => {
+      const token = await getAdminToken();
+      await Promise.all(ids.map((id) => api.admin.products.remove(id, token)));
+    },
+    onSuccess: (_, ids) => {
+      invalidateProducts();
+      setSelectedProductIds((current) => current.filter((id) => !ids.includes(id)));
+      setConfirmBulkDelete(null);
+      setDeleteError(null);
+    },
+    onError: (e: Error) => setDeleteError(e.message),
+  });
+
   const roleMutation = useMutation({
     mutationFn: async ({ id, role }: { id: string; role: 'customer' | 'admin' }) => api.admin.updateUserRole(id, role, await getAdminToken()),
     onSuccess: () => {
@@ -164,6 +504,26 @@ function AdminPanel({ access, onGoToStore }: { access: AdminAccess; onGoToStore:
       void queryClient.invalidateQueries({ queryKey: ['admin-dashboard'] });
     },
   });
+
+  const userDeleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const token = await getAdminToken();
+      return fetch(`/api/admin/users/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['admin-users'] });
+      void queryClient.invalidateQueries({ queryKey: ['admin-dashboard'] });
+    },
+  });
+
+  const [showBackToTop, setShowBackToTop] = useState(false);
+  useEffect(() => {
+    if (page !== 'products' && page !== 'orders') { setShowBackToTop(false); return; }
+    const onScroll = () => setShowBackToTop(window.scrollY > 400);
+    onScroll();
+    window.addEventListener('scroll', onScroll);
+    return () => window.removeEventListener('scroll', onScroll);
+  }, [page]);
 
   const orders = ordersQuery.data || [];
   const products = productsQuery.data || [];
@@ -178,22 +538,34 @@ function AdminPanel({ access, onGoToStore }: { access: AdminAccess; onGoToStore:
     users: users.length,
   }), [orders.length, products.length, users.length]);
 
-  const categories = [...new Set(products.map((product) => product.category))];
+  const categories = useMemo(() => [...new Set(products.map(p => p.category))].sort(), [products]);
 
-  const beginProductEdit = (product: Product) => {
-    setEditingProductId(product._id);
-    setProductDrafts((drafts) => ({
-      ...drafts,
-      [product._id]: { price: product.price, stock: product.stock, active: product.active },
-    }));
-  };
+  const displayedProducts = useMemo(() => {
+    return (products as Product[]).filter(p => {
+      const matchCat = productCatFilter === 'Todos' || p.category === productCatFilter;
+      const term = productSearch.toLowerCase();
+      const matchSearch = !term || p.name.toLowerCase().includes(term) || p.brand.toLowerCase().includes(term);
+      return matchCat && matchSearch;
+    });
+  }, [products, productCatFilter, productSearch]);
 
-  const draftFor = (product: Product) => productDrafts[product._id] || { price: product.price, stock: product.stock, active: product.active };
+  const displayedProductIds = useMemo(() => displayedProducts.map((product) => product._id || product.id), [displayedProducts]);
+  const selectedDisplayedIds = useMemo(() => selectedProductIds.filter((id) => displayedProductIds.includes(id)), [selectedProductIds, displayedProductIds]);
+  const allDisplayedSelected = displayedProductIds.length > 0 && selectedDisplayedIds.length === displayedProductIds.length;
+
+  useEffect(() => {
+    const validIds = new Set((products as Product[]).map((product) => product._id || product.id));
+    setSelectedProductIds((current) => current.filter((id) => validIds.has(id)));
+  }, [products]);
+
+  const isSaving = productUpdateMutation.isPending || productCreateMutation.isPending;
 
   return (
     <div style={{ display: 'grid', gridTemplateColumns: '240px 1fr', minHeight: '100vh', background: 'var(--cream-2)' }}>
       <Sidebar page={page} setPage={setPage} onGoToStore={onGoToStore} counts={sidebarCounts} adminName={access.name} adminEmail={access.email} />
       <div style={{ padding: '36px 48px 80px', overflow: 'auto' }}>
+
+        {/* ── Dashboard ── */}
         {page === 'dashboard' && (
           <>
             <PageHeader kicker="Panel de administración" title={<>Dashboard <em style={{ color: 'var(--green)' }}>Healthora</em></>} sub="Resumen en vivo de ventas, órdenes, usuarios y stock." />
@@ -211,14 +583,14 @@ function AdminPanel({ access, onGoToStore }: { access: AdminAccess; onGoToStore:
             <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: 20, marginTop: 24 }}>
               <Card title="Pedidos recientes" sub="Últimas 5 órdenes del ecommerce">
                 <table style={tableStyle}>
-                  <thead><tr><th style={th}>Orden</th><th style={th}>Cliente</th><th style={th}>Total</th><th style={th}>Estado</th></tr></thead>
+                  <thead><tr><th style={th}>Orden</th><th style={th}>Cliente</th><th style={th}>Total</th><th style={th}>Pago</th></tr></thead>
                   <tbody>
                     {(dashboard?.recentOrders || []).map((order) => (
                       <tr key={order._id} style={trStyle}>
                         <td style={{ ...td, fontFamily: '"JetBrains Mono", monospace' }}>{order._id.slice(-8).toUpperCase()}</td>
                         <td style={td}><div style={{ fontWeight: 500 }}>{order.customerName || 'Cliente'}</div><div style={{ fontSize: 11, color: 'var(--ink-60)' }}>{order.customerEmail}</div></td>
                         <td style={{ ...td, fontFamily: '"Instrument Serif", serif', fontSize: 18 }}>${(order.total || 0).toFixed(2)}</td>
-                        <td style={td}><StatusPill status={order.status || 'pending_payment'} /></td>
+                        <td style={td}><StatusPill status={order.paymentStatus === 'paid' ? 'Pagado' : 'Pendiente'} /></td>
                       </tr>
                     ))}
                   </tbody>
@@ -228,7 +600,7 @@ function AdminPanel({ access, onGoToStore }: { access: AdminAccess; onGoToStore:
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                   {(dashboard?.lowStockProducts || []).map((product) => (
                     <div key={product.id} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                      <div style={{ width: 42, height: 48, borderRadius: 10, overflow: 'hidden', border: '1px solid var(--ink-06)' }}><ProductImage product={product} size="xs" /></div>
+                      <div style={{ width: 60, height: 72, borderRadius: 10, overflow: 'hidden', border: '1px solid var(--ink-06)', flexShrink: 0 }}><ProductImage product={product} size="xs" /></div>
                       <div style={{ flex: 1 }}><div style={{ fontSize: 13, fontWeight: 500 }}>{product.name}</div><div style={{ fontSize: 11, color: 'var(--ink-60)' }}>{product.brand}</div></div>
                       <StatusPill status={`${product.stock} uds`} />
                     </div>
@@ -240,33 +612,68 @@ function AdminPanel({ access, onGoToStore }: { access: AdminAccess; onGoToStore:
           </>
         )}
 
+        {/* ── Orders ── */}
         {page === 'orders' && (
           <>
             <PageHeader kicker="Pedidos" title={<>Gestión de <em style={{ color: 'var(--green)' }}>pedidos</em></>} sub="Cambia estados y monitorea el ciclo completo de la orden." />
             <Card pad={0}>
-              <div style={{ padding: '20px 24px', display: 'flex', flexWrap: 'wrap', gap: 6, borderBottom: '1px solid var(--ink-06)' }}>
-                {['', ...statusOptions].map((status) => (
-                  <button key={status} onClick={() => setOrderFilter(status)} style={{ padding: '7px 14px', borderRadius: 999, fontSize: 12, cursor: 'pointer', border: '1px solid ' + (orderFilter === status ? 'var(--ink)' : 'var(--ink-20)'), background: orderFilter === status ? 'var(--ink)' : 'transparent', color: orderFilter === status ? 'var(--cream)' : 'var(--ink)', fontFamily: '"Geist", sans-serif' }}>{statusLabels[status]}</button>
+              <div style={{ padding: '20px 24px', display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center', borderBottom: '1px solid var(--ink-06)' }}>
+                <div style={{ fontSize: 10, fontFamily: '"JetBrains Mono", monospace', textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--ink-60)', padding: '8px 12px 0 0' }}>Estado</div>
+                {fulfillmentStatusOptions.map((status) => (
+                  <button key={status} onClick={() => setOrderFulfillmentFilter(status)} style={{ padding: '7px 14px', borderRadius: 999, fontSize: 12, cursor: 'pointer', border: '1px solid ' + (orderFulfillmentFilter === status ? 'var(--ink)' : 'var(--ink-20)'), background: orderFulfillmentFilter === status ? 'var(--ink)' : 'transparent', color: orderFulfillmentFilter === status ? 'var(--cream)' : 'var(--ink)', fontFamily: '"Geist", sans-serif' }}>{fulfillmentStatusLabels[status]}</button>
                 ))}
+                {orderFulfillmentFilter && (
+                  <button onClick={() => setOrderFulfillmentFilter('')} style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: '2px 4px', display: 'flex', alignItems: 'center', color: 'var(--ink-40)', borderRadius: 4, marginLeft: 8 }}>
+                    <Icon name="x" size={13} />
+                  </button>
+                )}
               </div>
               <table style={tableStyle}>
-                <thead><tr><th style={th}>Orden</th><th style={th}>Cliente</th><th style={th}>Items</th><th style={th}>Total</th><th style={th}>Estado</th><th style={th}>Fecha</th></tr></thead>
+                <thead><tr><th style={th}>Orden</th><th style={th}>Cliente / Envío</th><th style={th}>Productos</th><th style={th}>Total</th><th style={th}>Pago</th><th style={th}>Estado</th><th style={th}>Fecha y hora</th></tr></thead>
                 <tbody>
                   {orders.map((order) => (
                     <tr key={order._id} style={trStyle}>
                       <td style={{ ...td, fontFamily: '"JetBrains Mono", monospace' }}>{order._id.slice(-8).toUpperCase()}</td>
-                      <td style={td}><div style={{ fontWeight: 500 }}>{order.customerName}</div><div style={{ fontSize: 11, color: 'var(--ink-60)' }}>{order.customerEmail}</div></td>
-                      <td style={{ ...td, fontFamily: '"JetBrains Mono", monospace' }}>{order.items?.length ?? 0}</td>
+                      <td style={td}>
+                        <div style={{ fontWeight: 500 }}>{order.customerName}</div>
+                        <div style={{ fontSize: 11, color: 'var(--ink-60)' }}>{order.customerEmail}</div>
+                        {order.address && (
+                          <div style={{ marginTop: 8, fontSize: 12, color: 'var(--ink-60)', lineHeight: 1.45 }}>
+                            {order.address.name} · {order.address.phone}<br />
+                            {order.address.address}, {order.address.city} · {order.address.postal}
+                          </div>
+                        )}
+                      </td>
+                      <td style={td}>
+                        <div style={{ fontSize: 11, fontFamily: '"JetBrains Mono", monospace', color: 'var(--ink-60)', marginBottom: 6 }}>{order.items?.length ?? 0} producto(s)</div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                          {(order.items || []).map((item) => (
+                            <div key={`${order._id}-${item.productId}`} style={{ fontSize: 12, lineHeight: 1.4 }}>
+                              <strong>{item.qty}x</strong> {item.productName}
+                            </div>
+                          ))}
+                        </div>
+                      </td>
                       <td style={{ ...td, fontFamily: '"Instrument Serif", serif', fontSize: 18 }}>${(order.total || 0).toFixed(2)}</td>
                       <td style={td}>
+                        <StatusPill status={order.paymentStatus === 'paid' ? 'Pagado' : 'Pendiente'} />
+                      </td>
+                      <td style={td}>
                         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                          <StatusPill status={order.status || 'pending_payment'} />
-                          <select value={order.status} onChange={(event) => orderStatusMutation.mutate({ id: order._id, status: event.target.value })} style={{ padding: '8px 10px', borderRadius: 8, border: '1px solid var(--ink-20)', background: 'transparent', fontSize: 12 }}>
-                            {statusOptions.map((status) => <option key={status} value={status}>{statusLabels[status]}</option>)}
+                          <StatusPill status={fulfillmentStatusLabels[order.fulfillmentStatus || 'unfulfilled']} />
+                          <select value={order.fulfillmentStatus || 'unfulfilled'} onChange={(e) => orderStatusesMutation.mutate({ id: order._id, fulfillmentStatus: e.target.value as FulfillmentStatus })} style={{ padding: '8px 10px', borderRadius: 8, border: '1px solid var(--ink-20)', background: 'transparent', fontSize: 12 }}>
+                            {fulfillmentStatusOptions.map((s) => <option key={s} value={s}>{fulfillmentStatusLabels[s]}</option>)}
                           </select>
                         </div>
                       </td>
-                      <td style={{ ...td, fontSize: 11, color: 'var(--ink-60)', fontFamily: '"JetBrains Mono", monospace' }}>{order.createdAt ? new Date(order.createdAt).toLocaleDateString() : '—'}</td>
+                      <td style={{ ...td, fontSize: 11, color: 'var(--ink-60)', fontFamily: '"JetBrains Mono", monospace' }}>
+                        {order.createdAt ? (
+                          <>
+                            <div>{new Date(order.createdAt).toLocaleDateString()}</div>
+                            <div style={{ marginTop: 4 }}>{new Date(order.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+                          </>
+                        ) : '—'}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -275,46 +682,238 @@ function AdminPanel({ access, onGoToStore }: { access: AdminAccess; onGoToStore:
           </>
         )}
 
+        {/* ── Products ── */}
         {page === 'products' && (
           <>
-            <PageHeader kicker={`Catálogo · ${products.length} productos`} title={<>Gestión de <em style={{ color: 'var(--green)' }}>productos</em></>} sub="Edita precio, stock y estado activo sin salir del panel." />
+            <PageHeader
+              kicker={`Catálogo · ${products.length} productos`}
+              title={<>Gestión de <em style={{ color: 'var(--green)' }}>productos</em></>}
+              sub="Agrega, edita, elimina y filtra el catálogo completo."
+              actions={
+                <Button variant="primary" onClick={() => setProductModal({ mode: 'add' })}>
+                  + Agregar producto
+                </Button>
+              }
+            />
+
+            {/* Filter bar */}
+            <div style={{ display: 'flex', gap: 12, marginBottom: 20, alignItems: 'center', flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--cream)', borderRadius: 999, padding: '9px 16px', border: '1px solid var(--ink-06)' }}>
+                <Icon name="search" size={14} stroke="var(--ink-40)" />
+                <input
+                  value={productSearch}
+                  onChange={e => setProductSearch(e.target.value)}
+                  placeholder="Buscar por nombre o marca…"
+                  style={{ border: 'none', outline: 'none', background: 'transparent', fontSize: 13, fontFamily: '"Geist", sans-serif', width: 210, color: 'var(--ink)' }}
+                />
+                {productSearch && (
+                  <button onClick={() => setProductSearch('')} style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: '2px 4px', display: 'flex', alignItems: 'center', color: 'var(--ink-40)', borderRadius: 4 }}>
+                    <Icon name="x" size={13} />
+                  </button>
+                )}
+              </div>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                {['Todos', ...categories].map(cat => (
+                  <button
+                    key={cat}
+                    onClick={() => setProductCatFilter(cat)}
+                    style={{ padding: '7px 14px', borderRadius: 999, fontSize: 12, cursor: 'pointer', border: '1px solid ' + (productCatFilter === cat ? 'var(--ink)' : 'var(--ink-20)'), background: productCatFilter === cat ? 'var(--ink)' : 'transparent', color: productCatFilter === cat ? 'var(--cream)' : 'var(--ink)', fontFamily: '"Geist", sans-serif', transition: 'all 120ms' }}
+                  >
+                    {cat}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 16, flexWrap: 'wrap' }}>
+              <div style={{ fontSize: 12, fontFamily: '"Geist", sans-serif', color: 'var(--ink-60)' }}>
+                {selectedDisplayedIds.length > 0 ? `${selectedDisplayedIds.length} seleccionados en esta vista` : 'Selecciona varios productos para borrado masivo.'}
+              </div>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <Button
+                  variant="outline"
+                  onClick={() => setSelectedProductIds((current) => current.filter((id) => !displayedProductIds.includes(id)))}
+                  disabled={selectedDisplayedIds.length === 0}
+                >
+                  Limpiar selección
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => setConfirmBulkDelete({ ids: selectedDisplayedIds, title: 'Eliminar seleccionados', description: `Se eliminarán ${selectedDisplayedIds.length} productos seleccionados de esta vista.` })}
+                  disabled={selectedDisplayedIds.length === 0}
+                  style={{ color: 'oklch(0.5 0.15 30)', borderColor: 'oklch(0.85 0.08 30)' }}
+                >
+                  Eliminar seleccionados
+                </Button>
+              </div>
+            </div>
+
             <Card pad={0}>
               <table style={tableStyle}>
-                <thead><tr><th style={th}>Producto</th><th style={th}>Categoría</th><th style={th}>Precio</th><th style={th}>Stock</th><th style={th}>Estado</th><th style={th}></th></tr></thead>
+                <thead>
+                  <tr>
+                    <th style={{ ...th, width: 52 }}>
+                      <input
+                        type="checkbox"
+                        checked={allDisplayedSelected}
+                        onChange={(e) => setSelectedProductIds((current) => e.target.checked ? Array.from(new Set([...current, ...displayedProductIds])) : current.filter((id) => !displayedProductIds.includes(id)))}
+                        aria-label="Seleccionar productos visibles"
+                        style={{ width: 16, height: 16, accentColor: 'var(--green)', cursor: 'pointer' }}
+                      />
+                    </th>
+                    <th style={th}>Producto</th>
+                    <th style={th}>Categoría</th>
+                    <th style={th}>Precio</th>
+                    <th style={th}>Stock</th>
+                    <th style={th}>Estado</th>
+                    <th style={th}></th>
+                  </tr>
+                </thead>
                 <tbody>
-                  {products.map((product) => {
-                    const draft = draftFor(product);
-                    const editing = editingProductId === product._id;
-
-                    return (
-                      <tr key={product.id} style={trStyle}>
-                        <td style={td}><div style={{ display: 'flex', alignItems: 'center', gap: 12 }}><div style={{ width: 44, height: 50, borderRadius: 8, overflow: 'hidden', border: '1px solid var(--ink-06)' }}><ProductImage product={product} size="xs" /></div><div><div style={{ fontSize: 13, fontWeight: 500 }}>{product.name}</div><div style={{ fontSize: 11, color: 'var(--ink-60)', fontFamily: '"JetBrains Mono", monospace' }}>{product.brand}</div></div></div></td>
-                        <td style={{ ...td, fontSize: 12 }}>{product.category}</td>
-                        <td style={td}>{editing ? <input type="number" value={draft.price} onChange={(event) => setProductDrafts((drafts) => ({ ...drafts, [product._id]: { ...draft, price: Number(event.target.value) } }))} style={{ width: 100, padding: '8px 10px', borderRadius: 8, border: '1px solid var(--ink-20)' }} /> : <div style={{ fontFamily: '"Instrument Serif", serif', fontSize: 18 }}>${product.price.toFixed(2)}</div>}</td>
-                        <td style={td}>{editing ? <input type="number" value={draft.stock} onChange={(event) => setProductDrafts((drafts) => ({ ...drafts, [product._id]: { ...draft, stock: Number(event.target.value) } }))} style={{ width: 80, padding: '8px 10px', borderRadius: 8, border: '1px solid var(--ink-20)' }} /> : product.stock}</td>
-                        <td style={td}>{editing ? <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}><input type="checkbox" checked={draft.active} onChange={(event) => setProductDrafts((drafts) => ({ ...drafts, [product._id]: { ...draft, active: event.target.checked } }))} /> Activo</label> : <StatusPill status={product.active ? 'Activo' : 'Inactivo'} />}</td>
-                        <td style={td}>
-                          {editing ? (
-                            <div style={{ display: 'flex', gap: 8 }}>
-                              <Button variant="primary" size="sm" onClick={() => productMutation.mutate({ mongoId: product._id, draft })}>Guardar</Button>
-                              <Button variant="outline" size="sm" onClick={() => setEditingProductId(null)}>Cancelar</Button>
-                            </div>
-                          ) : (
-                            <button style={iconBtnAd} onClick={() => beginProductEdit(product)}><Icon name="settings" size={14} /></button>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
+                  {displayedProducts.map((product) => (
+                    <tr key={product.id} style={trStyle}>
+                      <td style={{ ...td, width: 52 }}>
+                        <input
+                          type="checkbox"
+                          checked={selectedProductIds.includes(product._id || product.id)}
+                          onChange={(e) => {
+                            const nextId = product._id || product.id;
+                            setSelectedProductIds((current) => e.target.checked ? [...current, nextId] : current.filter((id) => id !== nextId));
+                          }}
+                          aria-label={`Seleccionar ${product.name}`}
+                          style={{ width: 16, height: 16, accentColor: 'var(--green)', cursor: 'pointer' }}
+                        />
+                      </td>
+                      <td style={td}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                          <div style={{ width: 60, height: 72, borderRadius: 8, overflow: 'hidden', border: '1px solid var(--ink-06)', flexShrink: 0 }}>
+                            <ProductImage product={product} size="xs" />
+                          </div>
+                          <div>
+                            <div style={{ fontSize: 13, fontWeight: 500 }}>{product.name}</div>
+                            <div style={{ fontSize: 11, color: 'var(--ink-60)', fontFamily: '"JetBrains Mono", monospace' }}>{product.brand}</div>
+                          </div>
+                        </div>
+                      </td>
+                      <td style={{ ...td, fontSize: 12 }}>{product.category}</td>
+                      <td style={td}>
+                        <div style={{ fontFamily: '"Instrument Serif", serif', fontSize: 18 }}>${product.price.toFixed(2)}</div>
+                        {product.priceBefore && <div style={{ fontSize: 11, color: 'var(--ink-40)', textDecoration: 'line-through', fontFamily: '"JetBrains Mono", monospace' }}>${product.priceBefore.toFixed(2)}</div>}
+                      </td>
+                      <td style={{ ...td, fontFamily: '"JetBrains Mono", monospace' }}>{product.stock}</td>
+                      <td style={td}><StatusPill status={product.active ? 'Activo' : 'Inactivo'} /></td>
+                      <td style={td}>
+                        <div style={{ display: 'flex', gap: 6 }}>
+                          <button
+                            style={iconBtnAd}
+                            title="Editar producto"
+                            onClick={() => setProductModal({ mode: 'edit', product })}
+                          >
+                            <Icon name="pencil" size={14} />
+                          </button>
+                          <button
+                            style={{ ...iconBtnAd, color: 'oklch(0.55 0.15 30)' }}
+                            title="Eliminar producto"
+                            onClick={() => { setDeleteError(null); setConfirmDeleteId(product._id || product.id); }}
+                          >
+                            <Icon name="trash" size={14} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                  {displayedProducts.length === 0 && (
+                    <tr>
+                      <td colSpan={7} style={{ ...td, textAlign: 'center', color: 'var(--ink-60)', padding: '48px 24px' }}>
+                        No hay productos para los filtros seleccionados.
+                      </td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </Card>
-            <div style={{ marginTop: 20, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              {categories.map((category) => <StatusPill key={category} status={category} />)}
-            </div>
+
+            {productModal && (
+              <ProductModal
+                mode={productModal.mode}
+                product={productModal.product}
+                categories={categories}
+                onClose={() => setProductModal(null)}
+                onSave={(data) => {
+                  if (productModal.mode === 'add') {
+                    productCreateMutation.mutate(data);
+                  } else if (productModal.product) {
+                    productUpdateMutation.mutate({ mongoId: productModal.product._id, data });
+                  }
+                }}
+                saving={isSaving}
+                error={(productCreateMutation.error as Error)?.message || (productUpdateMutation.error as Error)?.message}
+              />
+            )}
+
+            {confirmDeleteId && (
+              <div onClick={() => { setConfirmDeleteId(null); setDeleteError(null); }} style={{ position: 'fixed', inset: 0, background: 'rgba(17, 24, 20, 0.28)', zIndex: 110, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+                <div onClick={(e) => e.stopPropagation()} style={{ width: '100%', maxWidth: 420, background: 'var(--cream)', border: '1px solid var(--ink-06)', borderRadius: 24, boxShadow: '0 28px 80px -36px rgba(0,0,0,0.32)', overflow: 'hidden' }}>
+                  <div style={{ padding: '22px 24px 18px', borderBottom: '1px solid var(--ink-06)' }}>
+                    <div style={{ fontSize: 10, fontFamily: '"JetBrains Mono", monospace', textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--ink-60)', marginBottom: 8 }}>Confirmación</div>
+                    <div style={{ fontFamily: '"Instrument Serif", serif', fontSize: 32, lineHeight: 1, letterSpacing: '-0.03em', color: 'var(--ink)' }}>Eliminar <em style={{ color: 'oklch(0.5 0.15 30)' }}>producto</em></div>
+                    <p style={{ margin: '12px 0 0', fontSize: 14, lineHeight: 1.55, color: 'var(--ink-80)', fontFamily: '"Geist", sans-serif' }}>
+                      Esta acción eliminará el producto del catálogo. No se puede deshacer.
+                    </p>
+                    {deleteError && <div style={{ marginTop: 12, fontSize: 12, color: 'oklch(0.5 0.15 30)', fontFamily: '"Geist", sans-serif' }}>{deleteError}</div>}
+                  </div>
+                  <div style={{ padding: 24, display: 'flex', gap: 10, justifyContent: 'flex-end', background: 'var(--cream-2)' }}>
+                    <Button variant="outline" onClick={() => { setConfirmDeleteId(null); setDeleteError(null); }}>Cancelar</Button>
+                    <Button variant="primary" onClick={() => { setDeleteError(null); productDeleteMutation.mutate(confirmDeleteId); }} disabled={productDeleteMutation.isPending}>
+                      {productDeleteMutation.isPending ? 'Eliminando…' : 'Sí, eliminar'}
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {confirmBulkDelete && (
+              <div onClick={() => { setConfirmBulkDelete(null); setDeleteError(null); }} style={{ position: 'fixed', inset: 0, background: 'rgba(17, 24, 20, 0.28)', zIndex: 111, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+                <div onClick={(e) => e.stopPropagation()} style={{ width: '100%', maxWidth: 440, background: 'var(--cream)', border: '1px solid var(--ink-06)', borderRadius: 24, boxShadow: '0 28px 80px -36px rgba(0,0,0,0.32)', overflow: 'hidden' }}>
+                  <div style={{ padding: '22px 24px 18px', borderBottom: '1px solid var(--ink-06)' }}>
+                    <div style={{ fontSize: 10, fontFamily: '"JetBrains Mono", monospace', textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--ink-60)', marginBottom: 8 }}>Confirmación</div>
+                    <div style={{ fontFamily: '"Instrument Serif", serif', fontSize: 32, lineHeight: 1, letterSpacing: '-0.03em', color: 'var(--ink)' }}>{confirmBulkDelete.title}</div>
+                    <p style={{ margin: '12px 0 0', fontSize: 14, lineHeight: 1.55, color: 'var(--ink-80)', fontFamily: '"Geist", sans-serif' }}>{confirmBulkDelete.description}</p>
+                    {deleteError && <div style={{ marginTop: 12, fontSize: 12, color: 'oklch(0.5 0.15 30)', fontFamily: '"Geist", sans-serif' }}>{deleteError}</div>}
+                  </div>
+                  <div style={{ padding: 24, display: 'flex', gap: 10, justifyContent: 'flex-end', background: 'var(--cream-2)' }}>
+                    <Button variant="outline" onClick={() => { setConfirmBulkDelete(null); setDeleteError(null); }}>Cancelar</Button>
+                    <Button variant="primary" onClick={() => { setDeleteError(null); bulkDeleteMutation.mutate(confirmBulkDelete.ids); }} disabled={bulkDeleteMutation.isPending}>
+                      {bulkDeleteMutation.isPending ? 'Eliminando…' : 'Sí, eliminar'}
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {confirmUserDelete && (
+              <div onClick={() => setConfirmUserDelete(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(17, 24, 20, 0.28)', zIndex: 112, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+                <div onClick={(e) => e.stopPropagation()} style={{ width: '100%', maxWidth: 420, background: 'var(--cream)', border: '1px solid var(--ink-06)', borderRadius: 24, boxShadow: '0 28px 80px -36px rgba(0,0,0,0.32)', overflow: 'hidden' }}>
+                  <div style={{ padding: '22px 24px 18px', borderBottom: '1px solid var(--ink-06)' }}>
+                    <div style={{ fontSize: 10, fontFamily: '"JetBrains Mono", monospace', textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--ink-60)', marginBottom: 8 }}>Confirmación</div>
+                    <div style={{ fontFamily: '"Instrument Serif", serif', fontSize: 32, lineHeight: 1, letterSpacing: '-0.03em', color: 'var(--ink)' }}>Eliminar <em style={{ color: 'oklch(0.5 0.15 30)' }}>usuario</em></div>
+                    <p style={{ margin: '12px 0 0', fontSize: 14, lineHeight: 1.55, color: 'var(--ink-80)', fontFamily: '"Geist", sans-serif' }}>
+                      ¿Eliminar a {confirmUserDelete.name}? Esto eliminará su cuenta local. El usuario seguirá existiendo en Clerk.
+                    </p>
+                  </div>
+                  <div style={{ padding: 24, display: 'flex', gap: 10, justifyContent: 'flex-end', background: 'var(--cream-2)' }}>
+                    <Button variant="outline" onClick={() => setConfirmUserDelete(null)}>Cancelar</Button>
+                    <Button variant="primary" onClick={() => userDeleteMutation.mutate(confirmUserDelete.id)} disabled={userDeleteMutation.isPending} style={{ background: 'oklch(0.5 0.15 30)' }}>
+                      {userDeleteMutation.isPending ? 'Eliminando…' : 'Sí, eliminar'}
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
           </>
         )}
 
+        {/* ── Users ── */}
         {page === 'users' && (
           <>
             <PageHeader kicker={`Usuarios · ${users.length} cuentas`} title={<>Gestión de <em style={{ color: 'var(--green)' }}>usuarios</em></>} sub="Administra roles locales y sincronízalos con Clerk." />
@@ -326,7 +925,7 @@ function AdminPanel({ access, onGoToStore }: { access: AdminAccess; onGoToStore:
                     <tr key={user._id} style={trStyle}>
                       <td style={td}><div style={{ display: 'flex', alignItems: 'center', gap: 12 }}><div style={{ width: 36, height: 36, borderRadius: 999, background: 'var(--green)', color: 'var(--lime)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: '"Instrument Serif", serif', fontSize: 15 }}>{(user.name || 'U')[0]}</div><div><div style={{ fontSize: 13, fontWeight: 500 }}>{user.name || 'Sin nombre'}</div><div style={{ fontSize: 11, color: 'var(--ink-60)', fontFamily: '"JetBrains Mono", monospace' }}>{user.email}</div></div></div></td>
                       <td style={td}>
-                        <select value={user.role || 'customer'} onChange={(event) => roleMutation.mutate({ id: user._id, role: event.target.value as 'customer' | 'admin' })} style={{ padding: '8px 10px', borderRadius: 8, border: '1px solid var(--ink-20)', background: 'transparent', fontSize: 12 }}>
+                        <select value={user.role || 'customer'} onChange={(e) => roleMutation.mutate({ id: user._id, role: e.target.value as 'customer' | 'admin' })} style={{ padding: '8px 10px', borderRadius: 8, border: '1px solid var(--ink-20)', background: 'transparent', fontSize: 12 }}>
                           <option value="customer">Customer</option>
                           <option value="admin">Admin</option>
                         </select>
@@ -334,7 +933,11 @@ function AdminPanel({ access, onGoToStore }: { access: AdminAccess; onGoToStore:
                       <td style={{ ...td, fontFamily: '"JetBrains Mono", monospace' }}>{user.orderCount ?? 0}</td>
                       <td style={{ ...td, fontFamily: '"Instrument Serif", serif', fontSize: 18 }}>${(user.ltv ?? 0).toFixed(2)}</td>
                       <td style={{ ...td, fontSize: 11, color: 'var(--ink-60)', fontFamily: '"JetBrains Mono", monospace' }}>{user.createdAt ? new Date(user.createdAt).toLocaleDateString() : '—'}</td>
-                      <td style={td}><StatusPill status={(user.role || 'customer').toUpperCase()} /></td>
+                      <td style={td}>
+                        <button onClick={() => setConfirmUserDelete({ id: user._id, name: user.name || user.email || 'este usuario' })} style={{ ...iconBtnAd, color: 'var(--coral)' }} title="Eliminar usuario">
+                          <Icon name="trash-2" size={14} />
+                        </button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -343,19 +946,20 @@ function AdminPanel({ access, onGoToStore }: { access: AdminAccess; onGoToStore:
           </>
         )}
 
+        {/* ── Sales ── */}
         {page === 'sales' && (
           <>
-            <PageHeader kicker="Ventas" title={<>Análisis de <em style={{ color: 'var(--green)' }}>ventas</em></>} sub="Tendencia diaria y productos con mayor ingreso acumulado." />
+            <PageHeader kicker="Ventas" title={<>Análisis de <em style={{ color: 'var(--green)' }}>ventas</em></>} sub="Tendencia diaria, productos y categorías más vendidas." />
             {sales?.daily?.length ? <Card title="Tendencia de ventas" sub="Ingresos diarios · últimos 30 días"><LineChart data={sales.daily} height={260} /></Card> : null}
             <div style={{ marginTop: 24, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
-              <Card title="Top productos por revenue" sub="Basado en órdenes pagadas o activas">
+              <Card title="Top productos por revenue" sub="Basado en órdenes pagadas">
                 <table style={tableStyle}>
                   <thead><tr><th style={th}>Producto</th><th style={th}>Categoría</th><th style={th}>Unidades</th><th style={th}>Revenue</th></tr></thead>
                   <tbody>
                     {(sales?.byCategory || []).map((row) => (
                       <tr key={row.productId} style={trStyle}>
                         <td style={td}>{row.name}</td>
-                        <td style={td}>{row.category}</td>
+                        <td style={td}><StatusPill status={row.category} /></td>
                         <td style={{ ...td, fontFamily: '"JetBrains Mono", monospace' }}>{row.units}</td>
                         <td style={{ ...td, fontFamily: '"Instrument Serif", serif', fontSize: 18 }}>${row.revenue.toFixed(2)}</td>
                       </tr>
@@ -363,21 +967,53 @@ function AdminPanel({ access, onGoToStore }: { access: AdminAccess; onGoToStore:
                   </tbody>
                 </table>
               </Card>
-              <Card title="Top líneas vendidas" sub="Agrupado por nombre guardado en la orden">
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                  {(sales?.topProducts || []).map((row) => (
-                    <div key={row._id} style={{ display: 'grid', gridTemplateColumns: '1fr auto auto', gap: 12, alignItems: 'center', paddingBottom: 12, borderBottom: '1px solid var(--ink-06)' }}>
-                      <div style={{ fontSize: 14, fontWeight: 500 }}>{row._id}</div>
-                      <div style={{ fontSize: 12, fontFamily: '"JetBrains Mono", monospace' }}>{row.units} uds</div>
-                      <div style={{ fontFamily: '"Instrument Serif", serif', fontSize: 18 }}>${row.revenue.toFixed(2)}</div>
-                    </div>
-                  ))}
-                </div>
-              </Card>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+                <Card title="Top categorías" sub="Por unidades vendidas">
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                    {(sales?.topCategories || []).length === 0 ? (
+                      <div style={{ fontSize: 14, color: 'var(--ink-60)' }}>No hay datos.</div>
+                    ) : (
+                      (sales?.topCategories || []).map((row, i) => (
+                        <div key={row._id}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 6 }}>
+                            <span style={{ fontSize: 11, fontFamily: '"JetBrains Mono", monospace', color: 'var(--ink-60)', width: 20 }}>#{i + 1}</span>
+                            <span style={{ fontSize: 14, fontWeight: 500, flex: 1 }}>{row._id}</span>
+                            <span style={{ fontSize: 14, fontFamily: '"JetBrains Mono", monospace' }}>{row.units} uds</span>
+                          </div>
+                          <div style={{ height: 6, background: 'var(--ink-06)', borderRadius: 999, overflow: 'hidden' }}>
+                            <div style={{ height: '100%', width: `${(row.units / Math.max(...((sales?.topCategories || []).map(r => r.units) || [1]))) * 100}%`, background: 'var(--green)', borderRadius: 999 }} />
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </Card>
+                <Card title="Top marcas" sub="Por unidades vendidas">
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                    {(sales?.topBrands || []).length === 0 ? (
+                      <div style={{ fontSize: 14, color: 'var(--ink-60)' }}>No hay datos.</div>
+                    ) : (
+                      (sales?.topBrands || []).map((row, i) => (
+                        <div key={row._id}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 6 }}>
+                            <span style={{ fontSize: 11, fontFamily: '"JetBrains Mono", monospace', color: 'var(--ink-60)', width: 20 }}>#{i + 1}</span>
+                            <span style={{ fontSize: 14, fontWeight: 500, flex: 1 }}>{row._id}</span>
+                            <span style={{ fontSize: 14, fontFamily: '"JetBrains Mono", monospace' }}>{row.units} uds</span>
+                          </div>
+                          <div style={{ height: 6, background: 'var(--ink-06)', borderRadius: 999, overflow: 'hidden' }}>
+                            <div style={{ height: '100%', width: `${(row.units / Math.max(...((sales?.topBrands || []).map(r => r.units) || [1]))) * 100}%`, background: 'var(--green)', borderRadius: 999 }} />
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </Card>
+              </div>
             </div>
           </>
         )}
 
+        {/* ── Earnings ── */}
         {page === 'earnings' && (
           <>
             <PageHeader kicker="Ganancias" title={<>Las <em style={{ color: 'var(--green)' }}>ganancias</em></>} sub="Resumen bruto, neto y evolución mensual del ecommerce." />
@@ -387,7 +1023,7 @@ function AdminPanel({ access, onGoToStore }: { access: AdminAccess; onGoToStore:
               <KpiCard label="Utilidad neta" value={earnings?.summary ? `$${earnings.summary.net.toLocaleString()}` : '—'} />
               <KpiCard label="Comisiones Stripe" value={earnings?.summary ? `$${earnings.summary.fees.toFixed(2)}` : '—'} sub="estimado 2.9%" />
             </div>
-            {earnings?.monthly?.length ? <Card title="Ganancias · últimos 6 meses" sub="Revenue mensual en USD"><BarChart data={earnings.monthly.map((item) => ({ date: item.month, revenue: item.revenue }))} height={240} /></Card> : null}
+            {earnings?.monthly?.length ? <Card title="Ganancias · últimos 6 meses" sub="Revenue mensual en USD"><BarChart data={earnings.monthly.map(m => ({ date: m.month, revenue: m.revenue }))} height={240} /></Card> : null}
             <Card title="Detalle mensual" sub="Revenue y órdenes por mes" pad={0}>
               <table style={tableStyle}>
                 <thead><tr><th style={th}>Mes</th><th style={th}>Órdenes</th><th style={th}>Revenue</th></tr></thead>
@@ -404,7 +1040,23 @@ function AdminPanel({ access, onGoToStore }: { access: AdminAccess; onGoToStore:
             </Card>
           </>
         )}
+
       </div>
+      {showBackToTop && (
+        <button
+          onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+          aria-label="Volver arriba"
+          style={{ position: 'fixed', right: 28, bottom: 28, width: 52, height: 52, borderRadius: 999, border: '1px solid rgba(255,255,255,0.12)', background: 'var(--green)', color: 'var(--lime)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', boxShadow: '0 18px 40px -18px rgba(0,0,0,0.35)', zIndex: 80, transition: 'transform 180ms ease, opacity 180ms ease' }}
+          onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-2px) scale(1.04)'; }}
+          onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0) scale(1)'; }}
+        >
+          <span style={{ transform: 'rotate(-90deg)', display: 'inline-flex' }}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M5 12h14" /><path d="m13 6 6 6-6 6" />
+            </svg>
+          </span>
+        </button>
+      )}
     </div>
   );
 }

@@ -7,7 +7,7 @@ Plataforma de ecommerce para medicamentos OTC y productos de salud. Proyecto aca
 | Capa | Tecnología |
 |------|-----------|
 | Frontend | React 19 + Vite + TypeScript |
-| Backend | Bun + Elysia |
+| Backend | Bun + Hono |
 | Base de datos | MongoDB Atlas (Mongoose) |
 | Autenticación | Clerk (`@clerk/clerk-react`) |
 | Pagos | Stripe |
@@ -20,19 +20,21 @@ Plataforma de ecommerce para medicamentos OTC y productos de salud. Proyecto aca
 - Carrito persistente por usuario con sincronización cross-device vía backend.
 - Panel admin funcional con acceso protegido por Clerk + rol `admin`.
 - Dashboard admin conectado a datos reales de órdenes, ventas, ganancias, usuarios y stock.
+- Checkout con campos de dirección obligatorios.
+- Órdenes se crean solo cuando Stripe confirma pago (webhook).
 
 ## Estructura
 
 ```
 Healthora/
-├── frontend/          # React + Vite (puerto 5175)
+├── frontend/          # React + Vite (puerto 5173)
 │   └── src/
 │       ├── components/
 │       ├── pages/
 │       ├── hooks/
 │       ├── store/
 │       └── lib/api.ts
-└── backend/           # Bun + Elysia (puerto 3001)
+└── backend/           # Bun + Hono (puerto 3001)
     └── src/
         ├── routes/
         ├── db/
@@ -51,7 +53,7 @@ CLERK_SECRET_KEY=sk_test_...
 STRIPE_SECRET_KEY=sk_test_...
 STRIPE_WEBHOOK_SECRET=whsec_...
 PORT=3001
-FRONTEND_URL=http://localhost:5175
+FRONTEND_URL=http://localhost:5173
 ADMIN_EMAILS=tu-correo-admin@dominio.com
 ```
 
@@ -81,7 +83,7 @@ npm install
 npm run dev
 ```
 
-El frontend queda en `http://localhost:5175` y hace proxy de `/api/*` al backend en `localhost:3001`.
+El frontend queda en `http://localhost:5173` y hace proxy de `/api/*` al backend en `localhost:3001`.
 
 ## API — Endpoints principales
 
@@ -100,8 +102,20 @@ El frontend queda en `http://localhost:5175` y hace proxy de `/api/*` al backend
 | Método | Ruta | Descripción |
 |--------|------|-------------|
 | GET | `/admin/access` | Validar acceso admin y rol actual |
-| GET | `/admin/dashboard` | Resumen general |
-| GET/PATCH | `/admin/orders` | Gestión de órdenes |
+| GET | `/admin/dashboard` | Resumen general (KPIs, ventas diarias, órdenes recientes, stock bajo) |
+| GET/PATCH | `/admin/orders` | Gestión de órdenes (filtro por fulfillmentStatus) |
+| GET/POST/PUT/DELETE | `/admin/products` | CRUD de productos |
+| GET | `/admin/users` | Lista de usuarios con LTV y ordenCount |
+| PATCH | `/admin/users/:id/role` | Cambiar rol de usuario |
+| DELETE | `/admin/users/:id` | Eliminar usuario local |
+| GET | `/admin/sales` | Análisis de ventas (top productos, categorías, marcas) |
+| GET | `/admin/earnings` | Ganancias brutas/netas mensuales |
+
+## Testing
+
+- **Test card éxito**: `4242 4242 4242 4242`
+- **Test card decline**: `4000 0000 0000 0002`
+- URLs autorizadas en Clerk: `http://localhost:5173`, `http://localhost:5175`, `http://localhost:3001`
 | GET/POST/PUT/DELETE | `/admin/products` | CRUD de productos |
 | GET | `/admin/users` | Listar usuarios |
 | PATCH | `/admin/users/:id/role` | Cambiar rol local y sincronizar con Clerk |

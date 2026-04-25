@@ -1,29 +1,38 @@
-import Elysia from 'elysia';
+import { Hono } from 'hono';
 import { requireAdmin } from '../../middleware/requireAdmin';
+import type { AppEnv } from '../../types/hono';
 import { User } from '../../db/models/User';
 import { Order } from '../../db/models/Order';
 import { clerk } from '../../lib/clerk';
-import { t } from 'elysia';
 
-export const adminUsersRouter = new Elysia({ prefix: '/admin/users' })
-  .use(requireAdmin)
-  .get('/', async () => {
+export const adminUsersRouter = new Hono<AppEnv>()
+  .use('*', requireAdmin)
+  .get('/', async (c) => {
     const users = await User.find().sort({ createdAt: -1 }).lean();
     const enriched = await Promise.all(
-      users.map(async (u) => {
-        const orders = await Order.find({ customerId: u.clerkId, status: { $ne: 'cancelled' } }).lean();
-        const ltv = orders.reduce((s, o) => s + ((o as { total?: number }).total || 0), 0);
-        return { ...u, orderCount: orders.length, ltv: Math.round(ltv * 100) / 100 };
+      users.map(async (user) => {
+        const orders = await Order.find({
+          customerId: user.clerkId,
+          $or: [
+            { paymentStatus: { $ne: 'cancelled' } },
+            { paymentStatus: { $exists: false }, status: { $ne: 'cancelled' } },
+          ],
+        }).lean();
+        const ltv = orders.reduce((sum, order) => sum + ((order as { total?: number }).total || 0), 0);
+        return { ...user, orderCount: orders.length, ltv: Math.round(ltv * 100) / 100 };
       })
     );
-    return enriched;
+
+    return c.json(enriched);
   })
-  .patch('/:id/role', async ({ params, body, set }) => {
-    const user = await User.findById(params.id);
-    if (!user) {
-      set.status = 404;
-      return { error: 'Not found' };
+  .patch('/:id/role', async (c) => {
+    const body = await c.req.json<{ role?: 'customer' | 'admin' }>();
+    if (body.role !== 'customer' && body.role !== 'admin') {
+      return c.json({ error: 'Invalid role' }, 400);
     }
+
+    const user = await User.findById(c.req.param('id'));
+    if (!user) return c.json({ error: 'Not found' }, 404);
 
     user.role = body.role;
     await user.save();
@@ -37,5 +46,13 @@ export const adminUsersRouter = new Elysia({ prefix: '/admin/users' })
       console.error('[ADMIN] Failed to sync Clerk role:', error);
     }
 
-    return { ok: true };
-  }, { body: t.Object({ role: t.Union([t.Literal('customer'), t.Literal('admin')]) }) });
+    return c.json({ ok: true });
+  })
+  .delete('/:id', async (c) => {
+    const user = await User.findById(c.req.param('id'));
+    if (!user) return c.json({ error: 'Not found' }, 404);
+
+    await User.findByIdAndDelete(user._id);
+
+    return c.json({ ok: true });
+  });

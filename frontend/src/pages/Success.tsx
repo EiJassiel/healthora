@@ -55,7 +55,7 @@ export function Success({ onBack }: SuccessProps) {
           <Icon name="check" size={36} />
         </div>
         <div style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: 11, color: 'var(--green)', letterSpacing: '0.12em', marginBottom: 12 }}>
-          ORDEN #{order._id.slice(-8).toUpperCase()} · PAGADA
+          ORDEN #{order._id.slice(-8).toUpperCase()} · {order.paymentStatus === 'paid' ? 'PAGADA' : 'CONFIRMADA'}
         </div>
         <h1 style={{ fontFamily: '"Instrument Serif", serif', fontSize: 76, letterSpacing: '-0.035em', lineHeight: 0.95, margin: '0 0 20px', color: 'var(--ink)', fontWeight: 400 }}>
           ¡Gracias por tu <em style={{ color: 'var(--green)' }}>compra</em>!
