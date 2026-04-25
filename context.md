@@ -17,7 +17,7 @@ Healthora es un ecommerce académico enfocado en productos de salud, cuidado per
 
 - `frontend/`: aplicación cliente en React
 - `backend/`: API, autenticación, checkout, modelos y seed
-- `README.md`: setup general del proyecto
+- `README.md`: setup general y reglas operativas del repo
 
 ## Current Setup
 
@@ -25,12 +25,15 @@ Healthora es un ecommerce académico enfocado en productos de salud, cuidado per
 - Backend local: `http://localhost:3001`
 - Seed command: `cd backend && bun run seed`
 - Admin bootstrap: `ADMIN_EMAILS` en `backend/.env`
+- Package manager recomendado: Bun en `frontend/` y `backend/`
+- Lockfiles esperados: `frontend/bun.lock` y `backend/bun.lock`
 
 ## Important Notes
 
 - No se deben subir secretos ni archivos de entorno reales.
 - Tampoco se deben subir carpetas locales de tooling como `.agents`, `.claude` o `.playwright-mcp`.
 - `skills-lock.json` se trata como estado local de herramientas, no como archivo del producto.
+- `scripts/` se trata como tooling local y no debe versionarse.
 - Si se cambia `ADMIN_EMAILS`, hay que reiniciar backend y volver a iniciar sesión.
 - Las órdenes se crean solo cuando Stripe confirma pago (webhook `checkout.session.completed`).
 - Las órdenes pueden reaparecer si existen sesiones pagadas en Stripe - el sistema las recrea automáticamente.
@@ -48,6 +51,8 @@ Healthora es un ecommerce académico enfocado en productos de salud, cuidado per
 - Ruta de ventas con top-products, top-categories y top-brands agrupados
 
 ### Frontend
+- Catálogo real con 90 productos y 10 categorías
+- 4 imágenes reales por producto servidas desde `frontend/public/products/`
 - Checkout con campos de dirección obligatorios (*)
 - Panel admin con:
   - Dashboard con métricas reales
@@ -58,12 +63,14 @@ Healthora es un ecommerce académico enfocado en productos de salud, cuidado per
   - Ganancias: revenue bruto/neto, detalle mensual
 - Catálogo con búsqueda de marcas con X para limpiar
 - Carrito persistente
+- Navegación del catálogo conserva filtro y página al volver desde detalle
 
 ### Features Clave
 - Orders solo se crean después de pago confirmado en Stripe
 - Usuario admin se asigna por email en `ADMIN_EMAILS` del `.env`
 - Panel admin accesible para usuarios con `role: admin` en Mongo o `ADMIN_EMAILS`
 - Categorías y marcas en ventas se agrupan y suman unidades/revenue
+- Carrito sincronizado cross-device a través del backend
 
 ## Testing
 
