@@ -36,11 +36,20 @@ export interface Product {
   certifications?: string[];
   interactions?: string;
   faq?: { q: string; a: string }[];
+  shadeTips?: string;
+  applicationTips?: string;
+  formulaDetails?: string;
+  skinTypes?: string[];
   imageUrl?: string;
   images?: {
     url: string;
     alt?: string;
     isPrimary?: boolean;
+  }[];
+  extraTabs?: {
+    id: string;
+    label: string;
+    content: string;
   }[];
   active: boolean;
   createdAt?: string;
