@@ -1,81 +1,207 @@
 # Contexto Healthora
 
-## Resumen
+Documento de referencia rápida para retomar el proyecto sin releer todo el código. Para diagramas completos y esquemas de BD ver [`docs/arquitectura.md`](docs/arquitectura.md).
 
-Healthora es un ecommerce academico enfocado en productos de salud, cuidado personal, bebe, skincare, fitness y medicamentos OTC.
+---
 
-## Tecnologias
+## Qué es
 
-- Frontend: React 19 + Vite + TypeScript
-- Backend: Bun + Hono
-- Base de datos: MongoDB Atlas con Mongoose
-- Autenticacion: Clerk
-- Pagos: Stripe
-- Estado y datos: Zustand + TanStack Query
+E-commerce académico de farmacia y salud con catálogo real de 200 productos, carrito persistente, pagos por Stripe y panel de administración completo. Monorepo con frontend React y backend Hono corriendo en Bun.
 
-## Estructura
+---
 
-- `frontend/`: aplicacion cliente en React
-- `backend/`: API, autenticacion, checkout, modelos y seed
-- `README.md`: configuracion general y reglas operativas del repo
-- `package.json` en raiz: scripts de conveniencia para levantar frontend y backend
+## Stack
 
-## Configuracion actual
+| Capa | Tecnología |
+|---|---|
+| Frontend | React 19 + Vite 8 + TypeScript |
+| Backend | Hono 4.12 + Bun runtime |
+| Base de datos | MongoDB Atlas + Mongoose 9.5 |
+| Autenticación | Clerk (React SDK + Backend SDK) |
+| Pagos | Stripe + Webhooks |
+| Estado cliente | Zustand 5 (carrito) |
+| Estado servidor | TanStack Query 5 (productos, órdenes) |
+| Gráficas | Recharts 3.8 (admin) |
 
-- Frontend local: `http://localhost:5173`
-- Backend local: `http://localhost:3001`
-- Comando de seed: `cd backend && bun run seed`
-- Inicializacion de admin: `ADMIN_EMAILS` en `backend/.env`
-- Gestor de paquetes recomendado: Bun en raiz, `frontend/` y `backend/`
-- Archivos de lock esperados: `bun.lock`, `frontend/bun.lock` y `backend/bun.lock`
+---
 
-## Notas importantes
+## URLs y Puertos
 
-- No se deben subir secretos ni archivos de entorno reales.
-- Tampoco se deben subir carpetas locales de herramientas como `.agents`, `.claude` o `.playwright-mcp`.
-- `skills-lock.json` se trata como estado local de herramientas, no como archivo del producto.
-- `scripts/` se trata como herramientas locales y no debe versionarse.
-- Si se cambia `ADMIN_EMAILS`, hay que reiniciar backend y volver a iniciar sesion.
-- Las ordenes se crean solo cuando Stripe confirma pago (webhook `checkout.session.completed`).
-- Las ordenes pueden reaparecer si existen sesiones pagadas en Stripe; el sistema las recrea automaticamente.
+| Servicio | Local |
+|---|---|
+| Frontend | `http://localhost:5173` |
+| Backend | `http://localhost:3001` |
+| Proxy API (Vite) | `/api/*` → `http://localhost:3001/*` |
 
-## Trabajo reciente
+URLs autorizadas en Clerk: `http://localhost:5173`, `http://localhost:5175`, `http://localhost:3001`
+
+---
+
+## Comandos Clave
+
+```bash
+# Levantar todo desde raíz
+bun run dev
+
+# Sembrar BD (solo primera vez o cuando se actualicen productos)
+cd backend && bun run seed
+
+# Webhook de Stripe en local
+stripe listen --forward-to http://localhost:3001/webhooks/stripe
+```
+
+---
+
+## Configuración de Admin
+
+- Se define en `ADMIN_EMAILS` dentro de `backend/.env`.
+- Al hacer login con ese email, `clerkAuth.ts` asigna `role: 'admin'` en MongoDB automáticamente.
+- Cambiar `ADMIN_EMAILS` requiere reiniciar el backend y volver a iniciar sesión.
+- Alternativamente, el rol se puede cambiar desde el panel admin (`PATCH /admin/users/:id/role`).
+
+---
+
+## Catálogo y Productos
+
+- 200 productos reales en 10 categorías: `cuidado-bebe`, `cuidado-personal`, `fitness`, `fragancias`, `hidratantes`, `maquillaje`, `medicamentos`, `salud-piel`, `suplementos`, `vitaminas`.
+- 4 imágenes por producto en `frontend/public/products/<categoria>/<product-id>-N.jpg`.
+- El seed hace `updateOne + upsert: true`, es seguro re-ejecutar.
+- Los productos tienen: nombre, marca, categoría, necesidad (`need`), precio, stock, beneficios, instrucciones, ingredientes, advertencias, FAQ, imágenes, y más campos descriptivos.
+
+---
+
+## Carrito
+
+- **Invitado**: vive solo en Zustand + `localStorage`. No se sincroniza al backend.
+- **Autenticado**:
+  - Al iniciar sesión, `App.tsx` llama `GET /cart` y reemplaza el estado local con el del servidor.
+  - Cada cambio dispara un guardado debounced a `PUT /cart`.
+  - Se sincroniza entre dispositivos.
+- Los dos carritos (guest y auth) son independientes dentro del store de Zustand.
+
+---
+
+## Checkout y Pagos
+
+Flujo completo:
+
+1. Usuario llena dirección en `Checkout.tsx`.
+2. `POST /checkout/session` crea una Stripe Checkout Session con los metadatos embebidos (items, dirección, impuesto, envío).
+3. Backend devuelve `{ url }` → frontend redirige a Stripe.
+4. Stripe recibe el pago y llama `POST /webhooks/stripe` con `checkout.session.completed`.
+5. El webhook crea la orden en MongoDB y decrementa el stock de cada producto.
+6. Stripe redirige al usuario a `/?view=success&session_id=<id>`.
+7. `Success.tsx` sondea `GET /orders?stripeSessionId=<id>` hasta encontrar la orden.
+
+**Cálculo de totales:**
+```
+shipping = subtotal >= 50 ? 0 : 6.90
+tax      = subtotal * 0.07
+total    = subtotal + shipping + tax
+```
+
+**Tarjetas de prueba:**
+- Aprobada: `4242 4242 4242 4242`
+- Rechazada: `4000 0000 0000 0002`
+
+---
+
+## Órdenes — Estados
+
+Dos campos independientes:
+
+| Campo | Valores posibles |
+|---|---|
+| `paymentStatus` | `pending_payment`, `paid`, `cancelled`, `refunded` |
+| `fulfillmentStatus` | `unfulfilled`, `processing`, `shipped`, `delivered`, `cancelled` |
+
+El campo `status` (legacy) se mantiene por compatibilidad pero los estados reales son los dos anteriores.
+
+---
+
+## Panel de Administración
+
+Accesible en `/admin` (ruta protegida por Clerk + validación de rol).
+
+| Sección | Qué hace |
+|---|---|
+| Dashboard | KPIs (ingresos, órdenes, usuarios, stock bajo), ventas diarias, órdenes recientes |
+| Pedidos | Lista todas las órdenes, permite cambiar `fulfillmentStatus` |
+| Productos | CRUD completo, eliminación masiva, filtros por categoría |
+| Usuarios | Lista con rol asignado, cambiar rol, eliminar usuario local |
+| Ventas | Top productos, marcas y categorías por unidades e ingreso |
+| Ganancias | Ingreso bruto y neto por mes (gráfico de barras con Recharts) |
+
+---
+
+## Autenticación — Cómo Funciona
+
+- Clerk emite un JWT al usuario tras el login.
+- El frontend lo adjunta en `Authorization: Bearer <token>` en cada petición privada.
+- `clerkAuth.ts` en el backend verifica el token con el SDK de Clerk.
+- Si el usuario no existe en MongoDB, se crea (upsert). Si ya existe, se actualiza nombre y email.
+- Si el email está en `ADMIN_EMAILS`, se guarda con `role: 'admin'`.
+- `requireAdmin.ts` lee `c.get('user').role` y corta con 403 si no es admin.
+
+---
+
+## Decisiones Técnicas Relevantes
+
+- **Hono sobre Express/Elysia**: migración realizada para aprovechar el rendimiento en Bun y la API más limpia de contexto.
+- **Webhook-first para órdenes**: la orden nunca se crea en el frontend ni al iniciar checkout. Solo existe cuando Stripe confirma el pago. Esto evita órdenes fantasma.
+- **Stock real**: el stock se decrementa en el webhook, no en el checkout. Si el webhook falla, el stock no se toca.
+- **Carrito separado guest/auth**: evita mezclar ítems entre sesiones de distintos usuarios en el mismo dispositivo.
+- **URL-based navigation**: las vistas del frontend se controlan con `?view=` en la URL, lo que permite preservar el estado del catálogo al navegar al detalle y volver.
+- **`stripeSessionId` único en órdenes**: índice sparse unique en MongoDB para evitar duplicados si el webhook se dispara dos veces.
+
+---
+
+## Trabajo Realizado (Historial)
 
 ### Backend
-- Migracion completa de Elysia a Hono
-- Autenticacion con Clerk usando `verifyToken`
-- Webhook de Stripe que crea ordenes solo cuando el pago es exitoso
-- Carrito persistente por usuario con sincronizacion entre dispositivos
-- Separacion de estados: `paymentStatus` (paid/pending/cancelled/refunded) vs `fulfillmentStatus` (unfulfilled/processing/shipped/delivered)
-- Eliminacion de duplicados de usuarios en MongoDB
-- Ajustes de Mongoose: `new: true` -> `returnDocument: 'after'`
-- Ruta de ventas con productos, categorias y marcas destacadas agrupadas
+- Migración completa de Elysia a Hono.
+- Middleware `clerkAuth` con `verifyToken` + upsert automático de usuario.
+- Webhook de Stripe con verificación de firma y creación de orden.
+- Carrito persistente por usuario (`GET /cart`, `PUT /cart`).
+- Separación de `paymentStatus` y `fulfillmentStatus` en órdenes.
+- Eliminación de duplicados de usuarios en MongoDB.
+- Ajuste de Mongoose: `returnDocument: 'after'` (antes `new: true`).
+- Rutas de ventas con agrupación por producto, categoría y marca.
+- Rutas de ganancias con desglose mensual.
+- Script `cleanupDuplicates.ts` para sanear la colección de usuarios.
 
 ### Frontend
-- Catalogo real con 200 productos y 10 categorias
-- 4 imagenes reales por producto servidas desde `frontend/public/products/`
-- Checkout con campos de direccion obligatorios
-- Panel admin con:
-  - Dashboard con metricas reales
-  - Pedidos: cambio de estado de envio con selector
-  - Productos: CRUD, eliminacion masiva y filtros por categoria
-  - Usuarios: cambio de rol y eliminacion local
-  - Ventas: tendencia diaria, top productos, top categorias y top marcas
-- Ganancias: ingreso bruto/neto y detalle mensual
-- Catalogo con busqueda de marcas y boton para limpiar
-- Carrito persistente
-- Navegacion del catalogo conserva filtro y pagina al volver desde detalle
+- Catálogo con 200 productos, 10 categorías, paginación y filtros persistentes en URL.
+- 4 imágenes reales por producto con carrusel en `ProductDetail.tsx`.
+- Checkout con campos de dirección obligatorios.
+- Carrito lateral (`CartDrawer.tsx`) con sincronización al backend.
+- Panel admin completo: Dashboard, Pedidos, Productos, Usuarios, Ventas, Ganancias.
+- Gráficos de ventas diarias y ganancias mensuales con Recharts.
+- `SignInModal.tsx` para forzar login antes de proceder al pago.
+- Página `Club.tsx` de membresía/fidelidad.
+- Navegación del catálogo conserva filtro activo y página al volver desde detalle de producto.
+- Icono SVG personalizado en el Header.
 
-## Caracteristicas clave
+---
 
-- Las ordenes solo se crean despues de pago confirmado en Stripe
-- El usuario admin se asigna por email en `ADMIN_EMAILS` del `.env`
-- El panel admin es accesible para usuarios con `role: admin` en Mongo o `ADMIN_EMAILS`
-- Las categorias y marcas en ventas se agrupan y suman unidades e ingreso
-- El carrito se sincroniza entre dispositivos a traves del backend
+## Archivos No Versionados
 
-## Pruebas
+```
+.env, .env.local (sí se versiona .env.example)
+.agents/, .claude/, .playwright-mcp/
+skills-lock.json
+scripts/
+tmp/
+dist/
+node_modules/
+```
 
-- Tarjeta de prueba de Stripe: `4242 4242 4242 4242`
-- Tarjeta rechazada de prueba: `4000 0000 0000 0002`
-- URLs autorizadas en Clerk: `http://localhost:5173`, `http://localhost:5175`, `http://localhost:3001`
+---
+
+## Próximos Pasos Sugeridos
+
+- Reseñas de productos (modelo `Review` en MongoDB).
+- Notificaciones por email al confirmar orden (Resend o SendGrid + webhook).
+- Página de perfil del usuario con historial de órdenes.
+- Modo oscuro.
+- Deploy: frontend en Vercel, backend en Railway o Fly.io, MongoDB Atlas ya listo.

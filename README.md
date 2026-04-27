@@ -1,81 +1,100 @@
 # Healthora
 
-Ecommerce academico enfocado en salud, cuidado personal, bebe, skincare, fitness y medicamentos OTC.
+E-commerce académico de farmacia y salud. Catálogo real de 200 productos en 10 categorías, carrito persistente multi-dispositivo, checkout con Stripe y panel de administración completo.
 
-## Tecnologias
+> Para la arquitectura detallada con diagramas, ver [`docs/arquitectura.md`](docs/arquitectura.md).
 
-| Capa | Tecnologia |
-|------|------------|
-| Frontend | React 19 + Vite + TypeScript |
-| Backend | Bun + Hono |
-| Base de datos | MongoDB Atlas + Mongoose |
-| Autenticacion | Clerk |
-| Pagos | Stripe |
-| Estado y datos | Zustand + TanStack Query |
+---
 
-## Estado Actual
+## Tecnologías
 
-- Catalogo real con `200` productos y `10` categorias.
-- Cada producto tiene `4` imagenes reales en `frontend/public/products/`.
-- Carrito persistente por usuario con sincronizacion entre dispositivos via backend.
-- Panel admin protegido con Clerk + rol `admin`.
-- Dashboard admin conectado a datos reales de ordenes, ventas, ganancias, usuarios y stock.
-- Checkout con direccion obligatoria.
-- Las ordenes solo se crean cuando Stripe confirma el pago por webhook.
-- El catalogo conserva categoria y pagina al entrar a detalle y volver atras.
+| Capa | Tecnología | Versión |
+|---|---|---|
+| Frontend | React + Vite + TypeScript | 19 / 8 / 6 |
+| Backend | Hono + Bun | 4.12 / latest |
+| Base de datos | MongoDB Atlas + Mongoose | Atlas / 9.5 |
+| Autenticación | Clerk | 5.61 (FE) / 3.3 (BE) |
+| Pagos | Stripe | 22.0 |
+| Estado cliente | Zustand | 5.0 |
+| Estado servidor | TanStack Query | 5.100 |
+| Gráficas | Recharts | 3.8 |
 
-## Estructura
+---
+
+## Estado del Proyecto
+
+- Catálogo con `200` productos reales y `10` categorías.
+- `4` imágenes reales por producto en `frontend/public/products/<categoria>/`.
+- Carrito persistente por usuario, sincronizado entre dispositivos vía backend.
+- Checkout con dirección obligatoria, cálculo de impuesto (7%) y envío ($6.90, gratis sobre $50).
+- Órdenes creadas exclusivamente al confirmar pago por webhook de Stripe.
+- Panel admin protegido: CRUD de productos, gestión de órdenes y usuarios, métricas reales.
+- Dashboard admin con KPIs en tiempo real, ventas diarias, productos con stock bajo.
+- Catálogo conserva categoría, página y filtros al volver desde detalle de producto.
+- Roles `customer` y `admin` gestionados por Clerk + MongoDB.
+
+---
+
+## Estructura del Repositorio
 
 ```text
 Healthora/
-|-- package.json
-|-- bun.lock
-|-- frontend/
-|   |-- public/products/
-|   |-- src/
-|   |-- package.json
-|   `-- bun.lock
-|-- backend/
-|   |-- src/
-|   |   |-- db/
-|   |   |-- middleware/
-|   |   `-- routes/
-|   |-- package.json
-|   `-- bun.lock
-|-- README.md
-`-- CONTEXT.md
+├── backend/
+│   ├── src/
+│   │   ├── index.ts               ← Entry point Hono
+│   │   ├── db/
+│   │   │   ├── connection.ts
+│   │   │   ├── models/            ← Product, Order, User, Category
+│   │   │   ├── seed.ts            ← 200 productos + 10 categorías
+│   │   │   └── seed-orders.ts
+│   │   ├── middleware/
+│   │   │   ├── clerkAuth.ts       ← Verifica JWT + upsert usuario
+│   │   │   └── requireAdmin.ts    ← Bloquea si rol !== 'admin'
+│   │   ├── routes/
+│   │   │   ├── products.ts
+│   │   │   ├── categories.ts
+│   │   │   ├── cart.ts
+│   │   │   ├── checkout.ts
+│   │   │   ├── orders.ts
+│   │   │   ├── account.ts
+│   │   │   ├── webhooks.ts
+│   │   │   └── admin/
+│   │   └── lib/                   ← clerk.ts, stripe.ts, orderStatus.ts
+│   ├── .env.example
+│   └── package.json
+│
+├── frontend/
+│   ├── public/products/           ← Imágenes por categoría (4 por producto)
+│   ├── src/
+│   │   ├── main.tsx               ← ClerkProvider + QueryClientProvider
+│   │   ├── App.tsx                ← Router + cart sync lifecycle
+│   │   ├── components/            ← chrome/, shared/, admin/
+│   │   ├── pages/                 ← Landing, Catalog, ProductDetail, Checkout…
+│   │   ├── hooks/                 ← useProducts, useCategories, useOrders
+│   │   ├── store/cartStore.ts     ← Zustand (guest vs auth)
+│   │   └── lib/api.ts             ← Cliente HTTP centralizado
+│   ├── .env.example
+│   └── package.json
+│
+├── docs/
+│   └── arquitectura.md            ← Diagramas, flujos, esquemas BD
+├── package.json                   ← Scripts raíz (concurrently)
+└── README.md
 ```
 
-## Gestor de paquetes
+---
 
-Este repo tiene `bun.lock` en la raiz, `frontend/` y `backend/`.
+## Gestor de Paquetes
 
-En la practica real:
+Este repo usa **Bun** en los tres niveles: raíz, `frontend/` y `backend/`. Cada uno tiene su propio `bun.lock`. No mezclar con `npm install`.
 
-- Se usa un solo gestor de paquetes por paquete.
-- Si una app usa Bun, se versiona su `bun.lock`.
-- No conviene mezclar `npm install` y `bun install` dentro de la misma carpeta.
+---
 
-En este proyecto:
+## Variables de Entorno
 
-- La raiz usa Bun para scripts de conveniencia como `bun run dev`.
-- `frontend/` usa Bun para la aplicacion cliente.
-- `backend/` usa Bun para la API.
+Copiar los `.env.example` antes de levantar el proyecto.
 
-## Variables de entorno
-
-Incluye archivos de ejemplo para guiar a quien clone el repo:
-
-- `backend/.env.example`
-- `frontend/.env.example`
-
-Al clonar el proyecto:
-
-1. Copia `backend/.env.example` a `backend/.env`
-2. Copia `frontend/.env.example` a `frontend/.env`
-3. Reemplaza los valores de ejemplo con tus credenciales reales
-
-### Backend - `backend/.env`
+### Backend — `backend/.env`
 
 ```env
 MONGODB_URI=mongodb+srv://<user>:<password>@cluster.mongodb.net/healthora
@@ -89,105 +108,161 @@ CLERK_JWT_KEY=
 ADMIN_EMAILS=tu-correo@dominio.com
 ```
 
-### Frontend - `frontend/.env`
+> `ADMIN_EMAILS` puede tener varios emails separados por coma. Al iniciar sesión con uno de esos emails, el middleware le asigna automáticamente `role: 'admin'` en MongoDB.
+
+### Frontend — `frontend/.env`
 
 ```env
 VITE_CLERK_PUBLISHABLE_KEY=pk_test_...
 VITE_API_URL=http://localhost:3001
 ```
 
-## Levantar el proyecto
+> En desarrollo, el proxy de Vite redirige `/api/*` → `http://localhost:3001/*`, por lo que `VITE_API_URL` solo importa en producción.
 
-### 1. Backend
+---
+
+## Levantar el Proyecto
+
+### Opción A — Desde la raíz (recomendado)
+
+```bash
+bun install
+bun run dev       # levanta frontend (:5173) y backend (:3001) en paralelo
+```
+
+### Opción B — Por separado
+
+```bash
+# Terminal 1
+cd backend && bun install && bun run dev
+
+# Terminal 2
+cd frontend && bun install && bun run dev
+```
+
+### Primera vez: sembrar la base de datos
 
 ```bash
 cd backend
-bun install
-bun run seed
-bun run dev
+bun run seed          # carga 200 productos + 10 categorías
+bun run seed-orders   # (opcional) carga órdenes de ejemplo
 ```
 
-### 2. Frontend
+### Webhook de Stripe en local
 
 ```bash
-cd frontend
-bun install
-bun run dev
+# Requiere Stripe CLI instalado y autenticado
+stripe listen --forward-to http://localhost:3001/webhooks/stripe
+# Copiar el whsec_... que imprime y pegarlo en STRIPE_WEBHOOK_SECRET
 ```
 
-### 3. Raiz del repositorio
+---
 
-```bash
-bun install
-bun run dev
-```
+## URLs Locales
 
-`bun run dev` en la raiz es solo un atajo para levantar frontend y backend al mismo tiempo desde el `package.json` raiz.
-Internamente ejecuta:
+| Servicio | URL |
+|---|---|
+| Frontend | `http://localhost:5173` |
+| Backend | `http://localhost:3001` |
+| Health check | `http://localhost:3001/health` |
 
-- `bun run dev:backend`
-- `bun run dev:frontend`
+---
 
-Ese script depende de `concurrently`, por eso la raiz tambien necesita su propio `package.json` y lockfile cuando se instala esa dependencia.
+## Endpoints del Backend
 
-## URLs locales
+### Públicos
 
-- Frontend: `http://localhost:5173`
-- Backend: `http://localhost:3001`
+| Método | Ruta | Descripción |
+|---|---|---|
+| GET | `/health` | Estado del servidor |
+| GET | `/products` | Lista productos (filtros: `category`, `need`, `brand`, `priceMax`, `sort`, `inStock`, `search`) |
+| GET | `/products/:id` | Detalle de producto |
+| GET | `/categories` | Lista categorías |
 
-## Endpoints principales
+### Autenticados (requieren JWT de Clerk)
 
-| Metodo | Ruta | Descripcion |
-|--------|------|-------------|
-| GET | `/products` | Lista productos con filtros |
-| GET | `/products/:id` | Devuelve detalle de producto |
-| GET | `/categories` | Lista categorias |
-| GET | `/health` | Verificacion de estado |
-| GET/PUT | `/cart` | Lee y persiste el carrito del usuario |
-| POST | `/checkout/session` | Crea sesion de pago Stripe |
-| GET | `/orders` | Lista ordenes del usuario autenticado |
+| Método | Ruta | Descripción |
+|---|---|---|
+| GET | `/cart` | Carrito del usuario (con productos hidratados) |
+| PUT | `/cart` | Guardar items del carrito |
+| POST | `/checkout/session` | Crear sesión de pago Stripe → devuelve `{ url }` |
+| GET | `/orders` | Órdenes del usuario (soporta `?stripeSessionId=`) |
+| GET | `/orders/:id` | Detalle de orden |
+| GET | `/account/addresses` | Direcciones guardadas |
+| PUT | `/account/addresses` | Guardar direcciones |
 
-### Admin
+### Webhook
 
-| Metodo | Ruta | Descripcion |
-|--------|------|-------------|
+| Método | Ruta | Descripción |
+|---|---|---|
+| POST | `/webhooks/stripe` | Recibe `checkout.session.completed` → crea orden + descuenta stock |
+
+### Admin (JWT + `role: admin`)
+
+| Método | Ruta | Descripción |
+|---|---|---|
 | GET | `/admin/access` | Valida acceso admin |
-| GET | `/admin/dashboard` | Indicadores, ventas, ordenes recientes y stock bajo |
-| GET/PATCH | `/admin/orders` | Gestion de despacho |
-| GET/POST/PUT/DELETE | `/admin/products` | CRUD de productos |
-| GET | `/admin/users` | Lista de usuarios |
-| PATCH | `/admin/users/:id/role` | Cambia rol |
-| DELETE | `/admin/users/:id` | Elimina usuario local |
-| GET | `/admin/sales` | Top productos, categorias y marcas |
-| GET | `/admin/earnings` | Ingreso bruto/neto mensual |
+| GET | `/admin/dashboard` | KPIs, ventas diarias, órdenes recientes, stock bajo |
+| GET | `/admin/orders` | Lista órdenes (filtro `?fulfillmentStatus=`) |
+| PATCH | `/admin/orders/:id/statuses` | Actualiza `paymentStatus` y/o `fulfillmentStatus` |
+| GET | `/admin/products` | Lista todos los productos |
+| POST | `/admin/products` | Crear producto |
+| PUT | `/admin/products/:id` | Actualizar producto |
+| DELETE | `/admin/products/:id` | Eliminar producto |
+| GET | `/admin/users` | Lista usuarios |
+| PATCH | `/admin/users/:id/role` | Cambiar rol (`customer` ↔ `admin`) |
+| DELETE | `/admin/users/:id` | Eliminar usuario |
+| GET | `/admin/sales` | Top productos, marcas y categorías por ingreso |
+| GET | `/admin/earnings` | Desglose mensual de ingresos brutos y netos |
 
-## Seed e imagenes
+---
 
-- El seed carga `200` productos y `10` categorias.
-- Las imagenes viven en `frontend/public/products/`.
-- La convencion de archivos es `/products/<categoria>/<product-id>-1.jpg` hasta `-4.jpg`.
-- Los reportes temporales de descarga y organizacion de imagenes se consideran herramientas locales y no se versionan.
+## Imágenes y Seed
+
+- Convención de archivos: `frontend/public/products/<categoria>/<product-id>-1.jpg` … `-4.jpg`
+- El seed lee los productos desde `src/db/seed.ts` y hace upsert en MongoDB.
+- Si se re-ejecuta `bun run seed`, actualiza sin duplicar (usa `updateOne` con `upsert: true`).
+
+---
+
+## Checkout y Órdenes
+
+- Dirección completa es obligatoria antes de pagar.
+- El backend crea la sesión de Stripe con todos los metadatos (items, dirección, impuesto, envío).
+- La orden en MongoDB **solo se crea en el webhook** (`checkout.session.completed`), nunca antes.
+- El frontend sondea `GET /orders?stripeSessionId=...` tras el redirect de Stripe para mostrar la confirmación.
+
+**Tarjetas de prueba Stripe:**
+
+| Número | Resultado |
+|---|---|
+| `4242 4242 4242 4242` | Pago aprobado |
+| `4000 0000 0000 0002` | Pago rechazado |
+
+---
 
 ## Admin
 
-- El acceso admin depende de `ADMIN_EMAILS` o del rol `admin` almacenado para el usuario.
-- Si cambias `ADMIN_EMAILS`, reinicia backend y vuelve a iniciar sesion.
+- Acceso por `ADMIN_EMAILS` en `.env` o por `role: 'admin'` guardado en MongoDB.
+- Si se modifica `ADMIN_EMAILS`, reiniciar el backend y volver a iniciar sesión.
+- El frontend valida el acceso llamando `GET /admin/access` antes de renderizar el panel.
 
-## Checkout y ordenes
+---
 
-- El checkout exige direccion completa.
-- Stripe test card valida: `4242 4242 4242 4242`
-- Stripe test card rechazada: `4000 0000 0000 0002`
-- Las ordenes solo se crean en `checkout.session.completed`.
+## Archivos No Versionados
 
-## Archivos locales que no se versionan
+```gitignore
+.env*
+!.env.example
+!.env.*.example
+.agents/
+.claude/
+.playwright-mcp/
+skills-lock.json
+scripts/
+tmp/
+dist/
+node_modules/
+```
 
-- `.env*`
-- `!.env.example`
-- `!.env.*.example`
-- `.agents/`, `.claude/`, `.playwright-mcp/`
-- `skills-lock.json`
-- `scripts/`
-- `tmp/`
-
-Los archivos dentro de `scripts/` se tratan como herramientas locales. Si alguna vez estuvieron trackeados por Git, hay que quitarlos del index para que `.gitignore` pueda hacer efecto.
+Los reportes temporales, scripts locales de utilidad y herramientas de agentes no se versionen aunque estén en el árbol local.
