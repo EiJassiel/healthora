@@ -8,7 +8,7 @@ import { Icon } from '../components/shared/Icon';
 import { useProducts } from '../hooks/useProducts';
 import { useCategories } from '../hooks/useCategories';
 
-type View = 'landing' | 'catalog' | 'product' | 'checkout' | 'success' | 'admin';
+type View = 'landing' | 'catalog' | 'product' | 'checkout' | 'success' | 'admin' | 'club';
 
 const NEEDS = [
   { id: 'Piel seca', label: 'Piel seca', tone: 'half-left' },

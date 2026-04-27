@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
-import { useUser, useClerk } from '@clerk/clerk-react';
+import { useUser } from '@clerk/clerk-react';
 import type { CartItem, OrderAddress, SavedAddress } from '../types';
 import { ProductImage } from '../components/shared/ProductImage';
 import { Button } from '../components/shared/Button';
 import { Icon } from '../components/shared/Icon';
+import { SignInModal } from '../components/chrome/SignInModal';
 import { api } from '../lib/api';
 import { useAuth } from '@clerk/clerk-react';
 
@@ -42,9 +43,16 @@ const authLogoImg: CSSProperties = { width: 18, height: 18, display: 'block' };
 
 export function Checkout({ items, onBack }: CheckoutProps) {
   const { isSignedIn, user } = useUser();
-  const { openSignIn } = useClerk();
   const { getToken } = useAuth();
   const [step, setStep] = useState(isSignedIn ? 2 : 1);
+  const [showSignInModal, setShowSignInModal] = useState(false);
+
+  useEffect(() => {
+    if (isSignedIn && step === 1) {
+      setStep(2);
+    }
+  }, [isSignedIn, step]);
+
   const [address, setAddress] = useState<OrderAddress>({ name: '', phone: '', address: '', city: '', postal: '' });
   const [savedAddresses, setSavedAddresses] = useState<SavedAddress[]>([]);
   const [processing, setProcessing] = useState(false);
@@ -146,19 +154,19 @@ export function Checkout({ items, onBack }: CheckoutProps) {
             </div>
             {!isSignedIn ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 20 }}>
-                <button style={authBtn} onClick={() => openSignIn({ redirectUrl: window.location.href })}>
+                <button style={authBtn} onClick={() => setShowSignInModal(true)}>
                   <span style={authLogoWrap}>
                     <img src="/brands/google.svg" alt="Google" style={authLogoImg} />
                   </span>
                   Continuar con Google
                 </button>
-                <button style={authBtn} onClick={() => openSignIn({ redirectUrl: window.location.href })}>
+                <button style={authBtn} onClick={() => setShowSignInModal(true)}>
                   <span style={authLogoWrap}>
                     <img src="/brands/microsoft.svg" alt="Microsoft" style={authLogoImg} />
                   </span>
                   Continuar con Microsoft
                 </button>
-                <button style={authBtn} onClick={() => openSignIn({ redirectUrl: window.location.href })}>
+                <button style={authBtn} onClick={() => setShowSignInModal(true)}>
                   <Icon name="lock" size={16} /> Recibir código OTP por email
                 </button>
                 <div style={{ fontSize: 11, color: 'var(--ink-60)', fontFamily: '"JetBrains Mono", monospace', letterSpacing: '0.06em', marginTop: 6, textAlign: 'center' }}>AUTENTICACIÓN PROTEGIDA POR CLERK</div>
@@ -278,6 +286,7 @@ export function Checkout({ items, onBack }: CheckoutProps) {
           </div>
         </aside>
       </div>
+      <SignInModal open={showSignInModal} onClose={() => setShowSignInModal(false)} />
     </main>
   );
 }
