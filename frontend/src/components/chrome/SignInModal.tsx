@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useSignIn, useSignUp } from '@clerk/clerk-react';
+import { useSignIn, useSignUp, useClerk } from '@clerk/clerk-react';
 import { Button } from '../shared/Button';
 import { Icon } from '../shared/Icon';
 
@@ -84,6 +84,7 @@ export function SignInModal({ open, onClose }: SignInModalProps) {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
+  const clerk = useClerk();
   const { signIn, setActive: setSignInActive, isLoaded: signInLoaded } = useSignIn();
   const { signUp, setActive: setSignUpActive, isLoaded: signUpLoaded } = useSignUp();
 
@@ -122,7 +123,6 @@ export function SignInModal({ open, onClose }: SignInModalProps) {
       setStep('otp');
     } catch (err: any) {
       const clerkErr = err?.errors?.[0];
-      // If trying to sign-in with unknown email, suggest sign-up
       if (mode === 'sign-in' && clerkErr?.code === 'form_identifier_not_found') {
         setError('No encontramos esa cuenta. ¿Querés crear una?');
       } else {
@@ -136,17 +136,18 @@ export function SignInModal({ open, onClose }: SignInModalProps) {
   /* ── OTP step ───────────────────────────────────────────── */
   const handleOtpSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!signInLoaded || !signUpLoaded) return;
     setLoading(true);
     setError('');
     try {
       if (mode === 'sign-in') {
-        const result = await signIn!.attemptFirstFactor({ strategy: 'email_code', code: otp });
+        const result = await signIn.attemptFirstFactor({ strategy: 'email_code', code: otp });
         if (result.status === 'complete') {
           await setSignInActive({ session: result.createdSessionId });
           handleClose();
         }
       } else {
-        const result = await signUp!.attemptEmailAddressVerification({ code: otp });
+        const result = await signUp.attemptEmailAddressVerification({ code: otp });
         if (result.status === 'complete') {
           await setSignUpActive({ session: result.createdSessionId });
           handleClose();
@@ -161,13 +162,14 @@ export function SignInModal({ open, onClose }: SignInModalProps) {
 
   /* ── OAuth ──────────────────────────────────────────────── */
   const handleOAuth = async (strategy: 'oauth_google' | 'oauth_microsoft') => {
-    if (!signInLoaded) return;
+    if (!signInLoaded || !clerk) return;
     setError('');
     try {
+      const redirectUrl = `${window.location.origin}/sso-callback`;
       await signIn.authenticateWithRedirect({
         strategy,
-        redirectUrl: window.location.origin,
-        redirectUrlComplete: window.location.origin,
+        redirectUrl,
+        redirectUrlComplete: `${window.location.origin}`,
       });
     } catch (err: any) {
       setError(err?.errors?.[0]?.longMessage ?? err?.errors?.[0]?.message ?? 'No se pudo conectar con el proveedor');

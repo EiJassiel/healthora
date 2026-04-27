@@ -11,8 +11,9 @@ import { CartDrawer } from './pages/CartDrawer';
 import { Checkout } from './pages/Checkout';
 import { Success } from './pages/Success';
 import { AdminApp } from './pages/admin/AdminApp';
+import { SSOCallbackPage } from './components/SSOCallback';
 import { useCartStore } from './store/cartStore';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useLocation } from 'react-router-dom';
 import { api } from './lib/api';
 import { useProduct } from './hooks/useProducts';
 
@@ -52,7 +53,9 @@ function buildSearchParams(view: View, filter?: CatalogFilter, productId?: strin
 }
 
 function AppInner() {
+  const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
+  const isSSOCallback = location.pathname === '/sso-callback';
   const initialView = (searchParams.get('view') as View) || (localStorage.getItem('healthora_view') as View) || 'landing';
   const [view, setView] = useState<View>(initialView);
   const [catalogFilter, setCatalogFilter] = useState<CatalogFilter>(() => readCatalogFilter(searchParams));
@@ -169,6 +172,10 @@ function AppInner() {
     if (activeProduct || isProductLoading) return;
     nav('catalog', catalogFilter, true);
   }, [activeProduct, catalogFilter, isProductLoading, view]);
+
+  if (isSSOCallback) {
+    return <SSOCallbackPage onSuccess={() => nav('landing')} />;
+  }
 
   if (view === 'admin') {
     return <AdminApp onGoToStore={() => nav('landing')} />;
