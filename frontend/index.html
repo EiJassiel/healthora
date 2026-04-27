@@ -36,6 +36,10 @@
       ::-webkit-scrollbar-track { background: transparent; }
       ::-webkit-scrollbar-thumb { background: var(--ink-20); border-radius: 999px; }
       ::-webkit-scrollbar-thumb:hover { background: var(--ink-40); }
+      @keyframes shimmer {
+        from { transform: translateX(-100%); }
+        to   { transform: translateX(100%); }
+      }
     </style>
   </head>
   <body>

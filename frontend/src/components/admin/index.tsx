@@ -26,6 +26,7 @@ function Skeleton({ height = 20, width, borderRadius = 4 }: { height?: number; w
         inset: 0,
         background: 'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.82) 50%, transparent 100%)',
         animation: 'shimmer 1.4s linear infinite',
+        willChange: 'transform',
       }} />
     </div>
   );
@@ -50,6 +51,7 @@ function SkeletonTitle({ size = 'lg', width = '55%' }: { size?: 'lg' | 'md'; wid
         inset: 0,
         background: 'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.82) 50%, transparent 100%)',
         animation: 'shimmer 1.4s linear infinite',
+        willChange: 'transform',
       }} />
     </div>
   );
@@ -183,9 +185,9 @@ export function KpiCard({ label, value, delta, sub, mode = 'light', loading = fa
     return (
       <div style={{ background: isDark ? 'var(--green)' : 'var(--cream)', color: isDark ? 'var(--cream)' : 'var(--ink)', borderRadius: 20, padding: '24px 26px', border: isDark ? 'none' : '1px solid var(--ink-06)', display: 'flex', flexDirection: 'column', gap: 16, minHeight: 150, justifyContent: 'space-between' }}>
         <Skeleton height={12} width="65%" borderRadius={4} />
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <Skeleton height={52} borderRadius={8} />
-          <Skeleton height={16} width="60%" borderRadius={4} />
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <Skeleton height={48} borderRadius={8} />
+          <Skeleton height={14} width="60%" borderRadius={4} />
         </div>
       </div>
     );
