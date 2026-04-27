@@ -10,6 +10,7 @@ import { ProductDetail } from './pages/ProductDetail';
 import { CartDrawer } from './pages/CartDrawer';
 import { Checkout } from './pages/Checkout';
 import { Success } from './pages/Success';
+import { Club } from './pages/Club';
 import { AdminApp } from './pages/admin/AdminApp';
 import { SSOCallbackPage } from './components/SSOCallback';
 import { useCartStore } from './store/cartStore';
@@ -17,7 +18,7 @@ import { useSearchParams, useLocation } from 'react-router-dom';
 import { api } from './lib/api';
 import { useProduct } from './hooks/useProducts';
 
-type View = 'landing' | 'catalog' | 'product' | 'checkout' | 'success' | 'admin';
+type View = 'landing' | 'catalog' | 'product' | 'checkout' | 'success' | 'admin' | 'club';
 type CatalogFilter = { category?: string; need?: string; search?: string; page?: number };
 
 function readCatalogFilter(searchParams: URLSearchParams): CatalogFilter {
@@ -204,6 +205,7 @@ function AppInner() {
         )}
         {view === 'checkout' && <Checkout items={checkoutItems ?? items} onBack={() => nav('catalog')} />}
         {view === 'success' && <Success onBack={() => nav('landing')} />}
+        {view === 'club' && <Club onNav={nav} />}
       </div>
       {showBackToTop && (
         <button

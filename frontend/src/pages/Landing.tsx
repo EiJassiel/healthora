@@ -305,7 +305,7 @@ export function Landing({ onNav, onOpenProduct, onAdd }: LandingProps) {
               <h3 style={{ fontFamily: '"Instrument Serif", serif', fontSize: 36, letterSpacing: '-0.02em', lineHeight: 1, margin: '12px 0 16px' }}>Muestras <em style={{ color: 'var(--green)' }}>gratis</em> en cada orden</h3>
               <p style={{ fontSize: 14, lineHeight: 1.5, color: 'var(--ink-60)', marginBottom: 20 }}>Regístrate y elige 2 muestras por compra mayor a $60.</p>
             </div>
-            <Button variant="primary" full>Unirme al club</Button>
+            <Button variant="primary" full onClick={() => onNav('club')}>Unirme al club</Button>
           </div>
         </div>
       </RevealSection>
