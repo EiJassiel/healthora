@@ -24,8 +24,8 @@ function Skeleton({ height = 20, width, borderRadius = 4 }: { height?: number; w
       <div style={{
         position: 'absolute',
         inset: 0,
-        background: 'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.55) 50%, transparent 100%)',
-        animation: 'shimmer 1.5s ease-in-out infinite',
+        background: 'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.82) 50%, transparent 100%)',
+        animation: 'shimmer 1.4s linear infinite',
       }} />
     </div>
   );
@@ -48,8 +48,8 @@ function SkeletonTitle({ size = 'lg', width = '55%' }: { size?: 'lg' | 'md'; wid
       <div style={{
         position: 'absolute',
         inset: 0,
-        background: 'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.6) 50%, transparent 100%)',
-        animation: 'shimmer 1.5s ease-in-out infinite',
+        background: 'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.82) 50%, transparent 100%)',
+        animation: 'shimmer 1.4s linear infinite',
       }} />
     </div>
   );
@@ -182,7 +182,7 @@ export function KpiCard({ label, value, delta, sub, mode = 'light', loading = fa
   if (loading) {
     return (
       <div style={{ background: isDark ? 'var(--green)' : 'var(--cream)', color: isDark ? 'var(--cream)' : 'var(--ink)', borderRadius: 20, padding: '24px 26px', border: isDark ? 'none' : '1px solid var(--ink-06)', display: 'flex', flexDirection: 'column', gap: 16, minHeight: 150, justifyContent: 'space-between' }}>
-        <div style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: 11, letterSpacing: '0.12em', textTransform: 'uppercase', opacity: isDark ? 0.75 : 0.6 }}>{label}</div>
+        <Skeleton height={12} width="65%" borderRadius={4} />
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           <Skeleton height={52} borderRadius={8} />
           <Skeleton height={16} width="60%" borderRadius={4} />
@@ -266,7 +266,7 @@ export function PageHeader({ kicker, title, sub, actions, loading = false }: Pag
 }
 
 // Card
-export function Card({ title, sub, children, pad = 24, loading = false }: { title?: string; sub?: string; children?: ReactNode; pad?: number; loading?: boolean }) {
+export function Card({ title, sub, children, pad = 24, loading = false, skeletonContent }: { title?: string; sub?: string; children?: ReactNode; pad?: number; loading?: boolean; skeletonContent?: ReactNode }) {
   return (
     <div style={{ background: 'var(--cream)', border: '1px solid var(--ink-06)', borderRadius: 20, padding: pad }}>
       {/* Title area — skeleton or real */}
@@ -287,11 +287,13 @@ export function Card({ title, sub, children, pad = 24, loading = false }: { titl
       )}
       {/* Content area */}
       {loading ? (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          {[65, 45, 80, 35, 55].map((w, i) => (
-            <Skeleton key={i} height={18} width={`${w}%`} borderRadius={5} />
-          ))}
-        </div>
+        skeletonContent ?? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            {[65, 45, 80, 35, 55].map((w, i) => (
+              <Skeleton key={i} height={18} width={`${w}%`} borderRadius={5} />
+            ))}
+          </div>
+        )
       ) : children}
     </div>
   );

@@ -585,11 +585,12 @@ function AdminPanel({ access, onGoToStore }: { access: AdminAccess; onGoToStore:
               <KpiCard label="Stock bajo" value={dashboard?.kpis.lowStock ?? '—'} sub="productos ≤5 unidades" loading={!dashboard} />
             </div>
 
-            {/* Revenue chart card — title skeletons when loading */}
+            {/* Revenue chart card */}
             <Card
               title="Ingresos · últimos 30 días"
               sub="Revenue diario, en USD"
               loading={!dashboard}
+              skeletonContent={<Skeleton height={240} borderRadius={8} />}
             >
               {(dashboard?.dailySales?.length ?? 0) > 0 ? (
                 <LineChart data={dashboard?.dailySales} height={240} />
@@ -600,7 +601,26 @@ function AdminPanel({ access, onGoToStore }: { access: AdminAccess; onGoToStore:
 
             <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: 20, marginTop: 24 }}>
               {/* Recent orders */}
-              <Card title="Pedidos recientes" sub="Últimas 5 órdenes del ecommerce" loading={dashboard === undefined}>
+              <Card
+                title="Pedidos recientes"
+                sub="Últimas 5 órdenes del ecommerce"
+                loading={dashboard === undefined}
+                skeletonContent={
+                  <div style={{ display: 'flex', flexDirection: 'column' }}>
+                    {[0, 1, 2, 3, 4].map(i => (
+                      <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 0', borderBottom: '1px solid var(--ink-06)' }}>
+                        <Skeleton height={13} width="16%" borderRadius={4} />
+                        <div style={{ flex: 1 }}>
+                          <Skeleton height={13} width="65%" borderRadius={4} />
+                          <div style={{ marginTop: 6 }}><Skeleton height={10} width="55%" borderRadius={4} /></div>
+                        </div>
+                        <Skeleton height={18} width="13%" borderRadius={4} />
+                        <Skeleton height={22} width={58} borderRadius={999} />
+                      </div>
+                    ))}
+                  </div>
+                }
+              >
                 {dashboard?.recentOrders?.length ? (
                   <table style={tableStyle}>
                     <thead><tr><th style={th}>Orden</th><th style={th}>Cliente</th><th style={th}>Total</th><th style={th}>Pago</th></tr></thead>
@@ -621,7 +641,25 @@ function AdminPanel({ access, onGoToStore }: { access: AdminAccess; onGoToStore:
               </Card>
 
               {/* Low stock */}
-              <Card title="Stock crítico" sub="Productos que requieren reposición" loading={dashboard === undefined}>
+              <Card
+                title="Stock crítico"
+                sub="Productos que requieren reposición"
+                loading={dashboard === undefined}
+                skeletonContent={
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                    {[0, 1, 2, 3].map(i => (
+                      <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                        <Skeleton height={72} width={60} borderRadius={10} />
+                        <div style={{ flex: 1 }}>
+                          <Skeleton height={13} width="65%" borderRadius={4} />
+                          <div style={{ marginTop: 7 }}><Skeleton height={11} width="42%" borderRadius={4} /></div>
+                        </div>
+                        <Skeleton height={22} width={54} borderRadius={999} />
+                      </div>
+                    ))}
+                  </div>
+                }
+              >
                 {dashboard?.lowStockProducts?.length ? (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                     {(dashboard?.lowStockProducts || []).map((product) => (
