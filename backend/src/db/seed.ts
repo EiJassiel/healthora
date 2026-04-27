@@ -2631,7 +2631,7 @@ const PRODUCTS = [
   },
   {
     id: 'eucerin-advanced-repair-creme',
-    name: 'Advanced Repair Creme',
+    name: 'Advanced Repair Cream',
     brand: 'Eucerin',
     category: 'Hidratantes',
     need: 'Piel seca',
