@@ -1,15 +1,38 @@
 import { BarChart as RechartsBar, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart as RechartsLine, Line, CartesianGrid } from 'recharts';
-import { useMemo } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { memo } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import { Icon } from '../shared/Icon';
-
 const Ctx = ({ active, payload, label }: { active?: boolean; payload?: { value: number }[]; label?: string }) => {
   if (active && payload?.length) {
     return <div style={{ background: 'var(--cream)', border: '1px solid var(--ink-06)', borderRadius: 8, padding: '8px 12px', fontSize: 12, fontFamily: '"JetBrains Mono", monospace' }}>{label}: ${payload[0].value}</div>;
   }
   return null;
 };
+
+function Skeleton({ height = 20, width, borderRadius = 4 }: { height?: number; width?: string | number; borderRadius?: number }) {
+  return (
+    <div style={{
+      height,
+      width,
+      borderRadius,
+      background: 'var(--ink-06)',
+      position: 'relative',
+      overflow: 'hidden',
+      flexShrink: 0,
+      animation: 'pulse 3s ease-in-out infinite'
+    }}>
+      <div style={{
+        position: 'absolute',
+        inset: 0,
+        background: 'linear-gradient(90deg, transparent 0%, rgba(0,0,0,0.15) 50%, transparent 100%)',
+        animation: 'shimmer 20s infinite'
+      }} />
+    </div>
+  );
+}
+
+export { Skeleton };
 
 const LineChartInner = ({ data, height }: { data?: { date?: string; revenue?: number; name?: string; value?: number }[]; height?: number }) => {
   const chartData = useMemo(() => {
@@ -92,15 +115,85 @@ export function StatusPill({ status }: { status: string }) {
   );
 }
 
+function useCounter(target: number, duration = 1500) {
+  const [count, setCount] = useState(0);
+
+  useEffect(() => {
+    if (target === 0) {
+      setCount(0);
+      return;
+    }
+    const start = 0;
+    const startTime = performance.now();
+    const diff = target - start;
+
+    function update(currentTime: number) {
+      const elapsed = currentTime - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      setCount(Math.round(start + diff * eased));
+      if (progress < 1) {
+        requestAnimationFrame(update);
+      }
+    }
+    requestAnimationFrame(update);
+  }, [target, duration]);
+
+  return count;
+}
+
+function formatValue(value: ReactNode, num: number): string {
+  if (typeof value === 'string' && value.startsWith('$')) {
+    return '$' + num.toLocaleString();
+  }
+  if (typeof value === 'string' && value.includes('%')) {
+    return num + value.slice(value.indexOf('%'));
+  }
+  return String(num);
+}
+
 // KpiCard
-interface KpiCardProps { label: string; value: ReactNode; delta?: number; sub?: string; mode?: 'light' | 'dark'; }
-export function KpiCard({ label, value, delta, sub, mode = 'light' }: KpiCardProps) {
+interface KpiCardProps { label: string; value?: ReactNode; delta?: number; sub?: string; mode?: 'light' | 'dark'; loading?: boolean; }
+export function KpiCard({ label, value, delta, sub, mode = 'light', loading = false }: KpiCardProps) {
   const isDark = mode === 'dark';
+  if (loading) {
+    return (
+      <div style={{ background: isDark ? 'var(--green)' : 'var(--cream)', color: isDark ? 'var(--cream)' : 'var(--ink)', borderRadius: 20, padding: '24px 26px', border: isDark ? 'none' : '1px solid var(--ink-06)', display: 'flex', flexDirection: 'column', gap: 16, minHeight: 150, justifyContent: 'space-between' }}>
+        <div style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: 11, letterSpacing: '0.12em', textTransform: 'uppercase', opacity: isDark ? 0.75 : 0.6 }}>{label}</div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <Skeleton height={52} borderRadius={8} />
+          <Skeleton height={16} width="60%" borderRadius={4} />
+        </div>
+      </div>
+    );
+  }
+  const rawNum = typeof value === 'number' ? value : (typeof value === 'string' ? parseFloat(value.replace(/[^0-9.-]/g, '')) : 0);
+  if (isNaN(rawNum)) {
+    return (
+      <div style={{ background: isDark ? 'var(--green)' : 'var(--cream)', color: isDark ? 'var(--cream)' : 'var(--ink)', borderRadius: 20, padding: '24px 26px', border: isDark ? 'none' : '1px solid var(--ink-06)', display: 'flex', flexDirection: 'column', gap: 16, minHeight: 150, justifyContent: 'space-between' }}>
+        <div style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: 11, letterSpacing: '0.12em', textTransform: 'uppercase', opacity: isDark ? 0.75 : 0.6 }}>{label}</div>
+        <div>
+          <div style={{ fontFamily: '"Instrument Serif", serif', fontSize: 52, letterSpacing: '-0.035em', lineHeight: 0.95, fontWeight: 400 }}>{value ?? '—'}</div>
+          {delta !== undefined && (
+            <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, fontFamily: '"Geist", sans-serif' }}>
+              <span style={{ padding: '2px 8px', borderRadius: 999, background: delta >= 0 ? (isDark ? 'var(--lime)' : 'oklch(0.92 0.1 140)') : 'oklch(0.93 0.1 30)', color: delta >= 0 ? (isDark ? 'var(--ink)' : 'oklch(0.4 0.1 140)') : 'oklch(0.5 0.15 30)', fontWeight: 600, fontSize: 11 }}>
+                {delta >= 0 ? '↑' : '↓'} {Math.abs(delta)}%
+              </span>
+              {sub && <span style={{ opacity: isDark ? 0.7 : 0.6 }}>{sub}</span>}
+            </div>
+          )}
+          {delta === undefined && sub && <div style={{ marginTop: 10, fontSize: 12, fontFamily: '"Geist", sans-serif', opacity: isDark ? 0.7 : 0.6 }}>{sub}</div>}
+        </div>
+      </div>
+    );
+  }
+  const animated = useCounter(rawNum);
+  const displayValue = formatValue(value, animated);
   return (
     <div style={{ background: isDark ? 'var(--green)' : 'var(--cream)', color: isDark ? 'var(--cream)' : 'var(--ink)', borderRadius: 20, padding: '24px 26px', border: isDark ? 'none' : '1px solid var(--ink-06)', display: 'flex', flexDirection: 'column', gap: 16, minHeight: 150, justifyContent: 'space-between' }}>
       <div style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: 11, letterSpacing: '0.12em', textTransform: 'uppercase', opacity: isDark ? 0.75 : 0.6 }}>{label}</div>
       <div>
-        <div style={{ fontFamily: '"Instrument Serif", serif', fontSize: 52, letterSpacing: '-0.035em', lineHeight: 0.95, fontWeight: 400 }}>{value}</div>
+        <div style={{ fontFamily: '"Instrument Serif", serif', fontSize: 52, letterSpacing: '-0.035em', lineHeight: 0.95, fontWeight: 400 }}>{displayValue}</div>
         {delta !== undefined && (
           <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, fontFamily: '"Geist", sans-serif' }}>
             <span style={{ padding: '2px 8px', borderRadius: 999, background: delta >= 0 ? (isDark ? 'var(--lime)' : 'oklch(0.92 0.1 140)') : 'oklch(0.93 0.1 30)', color: delta >= 0 ? (isDark ? 'var(--ink)' : 'oklch(0.4 0.1 140)') : 'oklch(0.5 0.15 30)', fontWeight: 600, fontSize: 11 }}>
@@ -131,7 +224,24 @@ export function PageHeader({ kicker, title, sub, actions }: PageHeaderProps) {
 }
 
 // Card
-export function Card({ title, sub, children, pad = 24 }: { title?: string; sub?: string; children: ReactNode; pad?: number }) {
+export function Card({ title, sub, children, pad = 24, loading = false }: { title?: string; sub?: string; children?: ReactNode; pad?: number; loading?: boolean }) {
+  if (loading) {
+    return (
+      <div style={{ background: 'var(--cream)', border: '1px solid var(--ink-06)', borderRadius: 20, padding: pad }}>
+        {title && (
+          <div style={{ marginBottom: 20 }}>
+            <h3 style={{ fontFamily: '"Instrument Serif", serif', fontSize: 26, letterSpacing: '-0.02em', margin: 0, fontWeight: 400 }}>{title}</h3>
+            {sub && <div style={{ fontSize: 11, fontFamily: '"JetBrains Mono", monospace', letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--ink-60)', marginTop: 6 }}>{sub}</div>}
+          </div>
+        )}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          {[20, 40, 60, 30].map((w, i) => (
+            <Skeleton key={i} height={20} width={`${w}%`} borderRadius={4} />
+          ))}
+        </div>
+      </div>
+    );
+  }
   return (
     <div style={{ background: 'var(--cream)', border: '1px solid var(--ink-06)', borderRadius: 20, padding: pad }}>
       {title && (

@@ -1,7 +1,7 @@
 import { type ChangeEvent, type CSSProperties, type DragEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth, useClerk, useUser } from '@clerk/clerk-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Sidebar, KpiCard, PageHeader, Card, LineChart, BarChart, StatusPill, tableStyle, th, td, trStyle, iconBtnAd } from '../../components/admin';
+import { Sidebar, KpiCard, PageHeader, Card, LineChart, BarChart, StatusPill, tableStyle, th, td, trStyle, iconBtnAd, Skeleton } from '../../components/admin';
 import { ProductImage } from '../../components/shared/ProductImage';
 import { Button } from '../../components/shared/Button';
 import { Icon } from '../../components/shared/Icon';
@@ -398,16 +398,10 @@ function AdminAccessGate({ onGoToStore }: { onGoToStore: () => void }) {
 function AdminPanel({ access, onGoToStore }: { access: AdminAccess; onGoToStore: () => void }) {
   const getAdminToken = useAdminToken();
   const queryClient = useQueryClient();
-  const [page, setPage] = useState<AdminPage>(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('healthora_admin_page') as AdminPage | null;
-      if (saved) return saved;
-    }
-    return 'dashboard';
-  });
+  const [page, setPage] = useState<AdminPage>('dashboard');
 
   useEffect(() => {
-    if (typeof window !== 'undefined') {
+    if (typeof window !== 'undefined' && page !== 'dashboard') {
       localStorage.setItem('healthora_admin_page', page);
     }
   }, [page]);
@@ -580,43 +574,64 @@ function AdminPanel({ access, onGoToStore }: { access: AdminAccess; onGoToStore:
           <>
             <PageHeader kicker="Panel de administración" title={<>Dashboard <em style={{ color: 'var(--green)' }}>Healthora</em></>} sub="Resumen en vivo de ventas, órdenes, usuarios y stock." />
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 24 }}>
-              <KpiCard mode="dark" label="Ingresos mes" value={dashboard ? `$${dashboard.kpis.revenue.toLocaleString()}` : '—'} delta={dashboard?.kpis.revenueDelta} sub="vs mes anterior" />
-              <KpiCard label="Órdenes mes" value={dashboard?.kpis.monthOrders ?? '—'} sub="pagadas o en curso" />
-              <KpiCard label="Usuarios" value={dashboard?.kpis.totalUsers ?? '—'} sub="clientes registrados" />
-              <KpiCard label="Stock bajo" value={dashboard?.kpis.lowStock ?? '—'} sub="productos ≤5 unidades" />
+              <KpiCard mode="dark" label="Ingresos mes" value={dashboard ? `$${dashboard.kpis.revenue.toLocaleString()}` : '—'} delta={dashboard?.kpis.revenueDelta} sub="vs mes anterior" loading={!dashboard} />
+              <KpiCard label="Órdenes mes" value={dashboard?.kpis.monthOrders ?? '—'} sub="pagadas o en curso" loading={!dashboard} />
+              <KpiCard label="Usuarios" value={dashboard?.kpis.totalUsers ?? '—'} sub="clientes registrados" loading={!dashboard} />
+              <KpiCard label="Stock bajo" value={dashboard?.kpis.lowStock ?? '—'} sub="productos ≤5 unidades" loading={!dashboard} />
             </div>
             {(dashboard?.dailySales?.length ?? 0) > 0 ? (
               <Card title="Ingresos · últimos 30 días" sub="Revenue diario, en USD">
-                <LineChart data={dashboard.dailySales} height={240} />
+                <LineChart data={dashboard?.dailySales} height={240} />
               </Card>
-            ) : null}
+            ) : <Card title="Ingresos · últimos 30 días" sub="Revenue diario, en USD">
+                <Skeleton height={240} borderRadius={8} />
+              </Card>}
             <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: 20, marginTop: 24 }}>
               <Card title="Pedidos recientes" sub="Últimas 5 órdenes del ecommerce">
-                <table style={tableStyle}>
-                  <thead><tr><th style={th}>Orden</th><th style={th}>Cliente</th><th style={th}>Total</th><th style={th}>Pago</th></tr></thead>
-                  <tbody>
-                    {(dashboard?.recentOrders || []).map((order) => (
-                      <tr key={order._id} style={trStyle}>
-                        <td style={{ ...td, fontFamily: '"JetBrains Mono", monospace' }}>{order._id.slice(-8).toUpperCase()}</td>
-                        <td style={td}><div style={{ fontWeight: 500 }}>{order.customerName || 'Cliente'}</div><div style={{ fontSize: 11, color: 'var(--ink-60)' }}>{order.customerEmail}</div></td>
-                        <td style={{ ...td, fontFamily: '"Instrument Serif", serif', fontSize: 18 }}>${(order.total || 0).toFixed(2)}</td>
-                        <td style={td}><StatusPill status={order.paymentStatus === 'paid' ? 'Pagado' : 'Pendiente'} /></td>
-                      </tr>
+                {dashboard === undefined ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                    {[1, 2, 3, 4, 5].map((i) => (
+                      <Skeleton key={i} height={52} borderRadius={8} />
                     ))}
-                  </tbody>
-                </table>
+                  </div>
+                ) : dashboard?.recentOrders?.length ? (
+                  <table style={tableStyle}>
+                    <thead><tr><th style={th}>Orden</th><th style={th}>Cliente</th><th style={th}>Total</th><th style={th}>Pago</th></tr></thead>
+                    <tbody>
+                      {(dashboard?.recentOrders || []).map((order) => (
+                        <tr key={order._id} style={trStyle}>
+                          <td style={{ ...td, fontFamily: '"JetBrains Mono", monospace' }}>{order._id.slice(-8).toUpperCase()}</td>
+                          <td style={td}><div style={{ fontWeight: 500 }}>{order.customerName || 'Cliente'}</div><div style={{ fontSize: 11, color: 'var(--ink-60)' }}>{order.customerEmail}</div></td>
+                          <td style={{ ...td, fontFamily: '"Instrument Serif", serif', fontSize: 18 }}>${(order.total || 0).toFixed(2)}</td>
+                          <td style={td}><StatusPill status={order.paymentStatus === 'paid' ? 'Pagado' : 'Pendiente'} /></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                ) : (
+                  <div style={{ fontSize: 14, color: 'var(--ink-60)' }}>No hay pedidos recientes.</div>
+                )}
               </Card>
               <Card title="Stock crítico" sub="Productos que requieren reposición">
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                  {(dashboard?.lowStockProducts || []).map((product) => (
-                    <div key={product.id} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                      <div style={{ width: 60, height: 72, borderRadius: 10, overflow: 'hidden', border: '1px solid var(--ink-06)', flexShrink: 0 }}><ProductImage product={product} size="xs" /></div>
-                      <div style={{ flex: 1 }}><div style={{ fontSize: 13, fontWeight: 500 }}>{product.name}</div><div style={{ fontSize: 11, color: 'var(--ink-60)' }}>{product.brand}</div></div>
-                      <StatusPill status={`${product.stock} uds`} />
-                    </div>
-                  ))}
-                  {!dashboard?.lowStockProducts?.length && <div style={{ fontSize: 14, color: 'var(--ink-60)' }}>No hay productos en stock crítico.</div>}
-                </div>
+                {dashboard === undefined ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                    {[1, 2, 3, 4].map((i) => (
+                      <Skeleton key={i} height={52} borderRadius={8} />
+                    ))}
+                  </div>
+                ) : dashboard?.lowStockProducts?.length ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                    {(dashboard?.lowStockProducts || []).map((product) => (
+                      <div key={product.id} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                        <div style={{ width: 60, height: 72, borderRadius: 10, overflow: 'hidden', border: '1px solid var(--ink-06)', flexShrink: 0 }}><ProductImage product={product} size="xs" /></div>
+                        <div style={{ flex: 1 }}><div style={{ fontSize: 13, fontWeight: 500 }}>{product.name}</div><div style={{ fontSize: 11, color: 'var(--ink-60)' }}>{product.brand}</div></div>
+                        <StatusPill status={`${product.stock} uds`} />
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div style={{ fontSize: 14, color: 'var(--ink-60)' }}>No hay productos en stock crítico.</div>
+                )}
               </Card>
             </div>
           </>
@@ -647,7 +662,7 @@ function AdminPanel({ access, onGoToStore }: { access: AdminAccess; onGoToStore:
                 ))}
               </div>
             </div>
-            <Card pad={0}>
+            <Card pad={0} loading={!orders?.length}>
               <div style={{ padding: '16px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--ink-06)' }}>
                 <div style={{ fontSize: 12, fontFamily: '"Geist", sans-serif', color: 'var(--ink-60)' }}>
                   {orderSearch ? `${displayedOrders.length} resultado${displayedOrders.length !== 1 ? 's' : ''} de ${orders?.length || 0}` : `${displayedOrders.length} pedido${displayedOrders.length !== 1 ? 's' : ''}`}
@@ -773,7 +788,7 @@ function AdminPanel({ access, onGoToStore }: { access: AdminAccess; onGoToStore:
               </div>
             </div>
 
-            <Card pad={0}>
+            <Card pad={0} loading={!products?.length}>
               <table style={tableStyle}>
                 <thead>
                   <tr>
@@ -942,7 +957,7 @@ function AdminPanel({ access, onGoToStore }: { access: AdminAccess; onGoToStore:
         {page === 'users' && (
           <>
             <PageHeader kicker={`Usuarios · ${users.length} cuentas`} title={<>Gestión de <em style={{ color: 'var(--green)' }}>usuarios</em></>} sub="Administra roles locales y sincronízalos con Clerk." />
-            <Card pad={0}>
+            <Card pad={0} loading={!users?.length}>
               <table style={tableStyle}>
                 <thead><tr><th style={th}>Usuario</th><th style={th}>Rol</th><th style={th}>Órdenes</th><th style={th}>LTV</th><th style={th}>Registro</th><th style={th}></th></tr></thead>
                 <tbody>
@@ -976,21 +991,21 @@ function AdminPanel({ access, onGoToStore }: { access: AdminAccess; onGoToStore:
           <>
             <PageHeader kicker="Ventas" title={<>Análisis de <em style={{ color: 'var(--green)' }}>ventas</em></>} sub="Tendencia diaria, productos y categorías más vendidas." />
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 28 }}>
-              <KpiCard label="Total órdenes" value={sales?.summary?.totalOrders?.toLocaleString() ?? '—'} sub="pagadas en total" />
-              <KpiCard label="Revenue total" value={sales?.summary ? `$${sales.summary.totalRevenue.toLocaleString()}` : '—'} sub="todos los pedidos" />
-              <KpiCard mode="dark" label="Ticket promedio" value={sales?.summary ? `$${sales.summary.avgOrderValue.toFixed(2)}` : '—'} sub="por orden" />
-              <KpiCard label="Unidades vendidas" value={sales?.summary?.totalUnits?.toLocaleString() ?? '—'} sub="total de productos" />
+              <KpiCard label="Total órdenes" value={sales?.summary?.totalOrders?.toLocaleString() ?? '—'} sub="pagadas en total" loading={!sales?.summary} />
+              <KpiCard label="Revenue total" value={sales?.summary ? `$${sales.summary.totalRevenue.toLocaleString()}` : '—'} sub="todos los pedidos" loading={!sales?.summary} />
+              <KpiCard mode="dark" label="Ticket promedio" value={sales?.summary ? `$${sales.summary.avgOrderValue.toFixed(2)}` : '—'} sub="por orden" loading={!sales?.summary} />
+              <KpiCard label="Unidades vendidas" value={sales?.summary?.totalUnits?.toLocaleString() ?? '—'} sub="total de productos" loading={!sales?.summary} />
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '3fr 2fr', gap: 20, marginBottom: 24 }}>
-              <Card title="Órdenes por día" sub="Pedidos diarios · últimos 30 días" pad={20}>
-                {sales?.daily ? <BarChart data={sales.daily} height={240} /> : <div style={{ height: 210, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--ink-60)', fontSize: 13 }}>Sin datos aún</div>}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 24, marginBottom: 24 }}>
+              <Card title="Órdenes por día" sub="Pedidos diarios · últimos 30 días">
+                {sales?.daily ? <BarChart data={sales.daily} height={240} /> : <Skeleton height={240} borderRadius={8} />}
               </Card>
-              <Card title="Revenue por categoría" sub="Ingresos por categoría" pad={20}>
-                {sales?.revenueByCategory?.length ? <BarChart data={sales.revenueByCategory} height={240} /> : <div style={{ height: 210, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--ink-60)', fontSize: 13 }}>Sin datos aún</div>}
+              <Card title="Revenue por categoría" sub="Ingresos por categoría">
+                {sales?.revenueByCategory?.length ? <BarChart data={sales.revenueByCategory} height={240} /> : <Skeleton height={240} borderRadius={8} />}
               </Card>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
-              <Card title="Top productos por revenue" sub="Basado en órdenes pagadas">
+              <Card title="Top productos por revenue" sub="Basado en órdenes pagadas" loading={!sales?.byCategory?.length}>
                 <table style={tableStyle}>
                   <thead><tr><th style={th}>Producto</th><th style={th}>Marca</th><th style={th}>Categoría</th><th style={th}>Unidades</th><th style={th}>Revenue</th></tr></thead>
                   <tbody>
@@ -1007,7 +1022,7 @@ function AdminPanel({ access, onGoToStore }: { access: AdminAccess; onGoToStore:
                 </table>
               </Card>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-                <Card title="Top categorías" sub="Por unidades vendidas">
+<Card title="Top categorías" sub="Por unidades vendidas" loading={!sales?.topCategories?.length}>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                     {(sales?.topCategories || []).length === 0 ? (
                       <div style={{ fontSize: 14, color: 'var(--ink-60)' }}>No hay datos.</div>
@@ -1027,7 +1042,7 @@ function AdminPanel({ access, onGoToStore }: { access: AdminAccess; onGoToStore:
                     )}
                   </div>
                 </Card>
-                <Card title="Top marcas" sub="Por unidades vendidas">
+                <Card title="Top marcas" sub="Por unidades vendidas" loading={!sales?.topBrands?.length}>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                     {(sales?.topBrands || []).length === 0 ? (
                       <div style={{ fontSize: 14, color: 'var(--ink-60)' }}>No hay datos.</div>
@@ -1057,13 +1072,12 @@ function AdminPanel({ access, onGoToStore }: { access: AdminAccess; onGoToStore:
           <>
             <PageHeader kicker="Ganancias" title={<>Las <em style={{ color: 'var(--green)' }}>ganancias</em></>} sub="Resumen bruto, neto y evolución mensual del ecommerce." />
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 24 }}>
-              <KpiCard mode="dark" label="Ingresos brutos" value={earnings?.summary ? `$${earnings.summary.gross.toLocaleString()}` : '—'} />
-              <KpiCard label="Impuestos" value={earnings?.summary ? `$${earnings.summary.tax.toFixed(2)}` : '—'} />
-              <KpiCard label="Utilidad neta" value={earnings?.summary ? `$${earnings.summary.net.toLocaleString()}` : '—'} />
-              <KpiCard label="Comisiones Stripe" value={earnings?.summary ? `$${earnings.summary.fees.toFixed(2)}` : '—'} sub="estimado 2.9%" />
+<KpiCard mode="dark" label="Ingresos brutos" value={earnings?.summary ? `$${earnings.summary.gross.toLocaleString()}` : '—'} loading={!earnings?.summary} />
+              <KpiCard label="Impuestos" value={earnings?.summary ? `$${earnings.summary.tax.toFixed(2)}` : '—'} loading={!earnings?.summary} />
+              <KpiCard label="Utilidad neta" value={earnings?.summary ? `$${earnings.summary.net.toLocaleString()}` : '—'} loading={!earnings?.summary} />
+              <KpiCard label="Comisiones Stripe" value={earnings?.summary ? `$${earnings.summary.fees.toFixed(2)}` : '—'} sub="estimado 2.9%" loading={!earnings?.summary} />
             </div>
-            {earnings?.monthly?.length ? <Card title="Ganancias · últimos 6 meses" sub="Revenue mensual en USD"><BarChart data={earnings.monthly.map(m => ({ date: m.month, revenue: m.revenue }))} height={240} /></Card> : null}
-            <Card title="Detalle mensual" sub="Revenue y órdenes por mes" pad={0}>
+            <Card title="Detalle mensual" sub="Revenue y órdenes por mes" pad={0} loading={!earnings?.monthly}>
               <table style={tableStyle}>
                 <thead><tr><th style={th}>Mes</th><th style={th}>Órdenes</th><th style={th}>Revenue</th></tr></thead>
                 <tbody>
