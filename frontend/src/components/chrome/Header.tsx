@@ -412,6 +412,13 @@ export function Header({ onNav, onOpenCart }: HeaderProps) {
               document.getElementById('nuevos')?.scrollIntoView({ behavior: 'smooth' });
             }, 100);
           }}>Recién llegados</a>
+
+        <a className="nav-link" onClick={() => {
+            onNav('landing', undefined, true);
+            setTimeout(() => {
+              document.getElementById('marcas')?.scrollIntoView({ behavior: 'smooth' });
+            }, 100);
+          }}>Marcas</a>
       </nav>
 
       <form

@@ -504,7 +504,7 @@ export function Landing({ onNav, onOpenProduct, onAdd }: LandingProps) {
       </RevealSection>
 
       {/* BRANDS */}
-      <RevealSection style={{ padding: '80px 0 0' }} delay={130}>
+      <RevealSection id="marcas" style={{ padding: '80px 0 0' }} delay={130}>
         <div style={{ padding: '0 40px', marginBottom: 40 }}>
           <div style={headKicker}>04 · Marcas</div>
           <h2 style={headTitle}>Las marcas en las que <em style={{ color: 'var(--green)' }}>confías</em></h2>
