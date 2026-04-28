@@ -411,7 +411,7 @@ export function Landing({ onNav, onOpenProduct, onAdd }: LandingProps) {
       <RevealSection id="bestsellers" style={{ padding: '80px 40px 0' }} delay={60}>
         <div style={{ display: 'flex', alignItems: 'end', justifyContent: 'space-between', marginBottom: 32 }}>
           <div>
-            <div style={headKicker}>02 · Best sellers</div>
+            <div style={headKicker}>02 · Más vendidos</div>
             <h2 style={headTitle}>Lo más vendido <em style={{ color: 'var(--green)' }}>esta semana</em></h2>
           </div>
           <a onClick={() => onNav('catalog')} style={seeAllLink}>Ver todos <Icon name="arrow-right" size={14} /></a>

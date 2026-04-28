@@ -407,7 +407,7 @@ export function Header({ onNav, onOpenCart }: HeaderProps) {
                 window.scrollTo({ top: window.scrollY + rect.top - offset, behavior: 'smooth' });
               }
             }, 100);
-          }}>Best sellers</a>
+          }}>Más vendidos</a>
 
         <a className="nav-link" onClick={() => {
             onNav('landing', undefined, true);
