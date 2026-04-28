@@ -3,6 +3,7 @@ import type { Product } from '../../types';
 import { ProductImage } from './ProductImage';
 import { Stars } from './Stars';
 import { Icon } from './Icon';
+import { useReviews } from '../../hooks/useReviews';
 
 interface ProductCardProps {
   product: Product;
@@ -12,6 +13,11 @@ interface ProductCardProps {
 
 export function ProductCard({ product, onClick, onAdd }: ProductCardProps) {
   const [hover, setHover] = useState(false);
+  const { data: liveReviews } = useReviews(product.id);
+  const liveCount = liveReviews?.length ?? 0;
+  const liveRating = liveReviews && liveReviews.length > 0
+    ? Math.round(liveReviews.reduce((s, r) => s + r.rating, 0) / liveReviews.length * 10) / 10
+    : 0;
   const primaryImage = product.imageUrl || product.images?.find((img) => img.isPrimary)?.url || product.images?.[0]?.url;
   const secondaryImage = product.images?.find((img) => img.url && img.url !== primaryImage)?.url;
 
@@ -61,10 +67,10 @@ export function ProductCard({ product, onClick, onAdd }: ProductCardProps) {
         <div style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: 10, color: 'var(--ink-60)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6 }}>{product.brand}</div>
         <div style={{ fontFamily: '"Geist", sans-serif', fontSize: 15, fontWeight: 500, color: 'var(--ink)', lineHeight: 1.25, marginBottom: 8, letterSpacing: '-0.01em', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', minHeight: 38 }}>{product.name}</div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10, minHeight: 18 }}>
-          {product.reviews > 0 ? (
+          {liveCount > 0 ? (
             <>
-              <Stars value={product.rating} size={11} />
-              <span style={{ fontSize: 11, color: 'var(--ink-60)', fontFamily: '"JetBrains Mono", monospace' }}>{product.rating} · {product.reviews}</span>
+              <Stars value={liveRating} size={11} />
+              <span style={{ fontSize: 11, color: 'var(--ink-60)', fontFamily: '"JetBrains Mono", monospace' }}>{liveRating} · {liveCount}</span>
             </>
           ) : (
             <span style={{ fontSize: 10, color: 'var(--ink-40)', fontFamily: '"JetBrains Mono", monospace', letterSpacing: '0.06em' }}>SIN RESEÑAS</span>

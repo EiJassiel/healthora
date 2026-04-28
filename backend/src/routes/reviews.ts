@@ -31,6 +31,7 @@ export const reviewsRouter = new Hono<AppEnv>()
       productId,
       userId: user.clerkId,
       userName: user.name || 'Usuario',
+      userAvatar: user.imageUrl,
       rating,
       title: title?.trim() || undefined,
       body: body.trim(),
@@ -45,4 +46,21 @@ export const reviewsRouter = new Hono<AppEnv>()
     );
 
     return c.json(review, 201);
+  })
+  .patch('/:id/helpful', clerkAuth, async (c) => {
+    const { id } = c.req.param();
+    const user = c.get('user');
+
+    const review = await Review.findById(id).lean();
+    if (!review) return c.json({ error: 'Reseña no encontrada' }, 404);
+    if (review.userId === user.clerkId) {
+      return c.json({ error: 'No puedes votar tu propia reseña' }, 403);
+    }
+
+    const updated = await Review.findByIdAndUpdate(
+      id,
+      { $addToSet: { helpfulVoters: user.clerkId } },
+      { new: true }
+    ).lean();
+    return c.json(updated);
   });

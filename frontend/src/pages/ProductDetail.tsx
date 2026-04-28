@@ -29,10 +29,8 @@ export function ProductDetail({ product, onAdd, onBuyNow, onOpenProduct, onBack 
   const [isZoomingOut, setIsZoomingOut] = useState(false);
   const { data: allProducts = [] } = useProducts();
   const related = allProducts.filter((p) => p.category === product.category && p.id !== product.id).slice(0, 4);
-  const { data: liveReviews, isSuccess: reviewsLoaded } = useReviews(product.id);
-  // Once the reviews query resolves, use the actual collection count (never fall back to the DB field,
-  // which may be a manually-set placeholder). While still loading, keep the DB value to avoid flicker.
-  const liveCount = reviewsLoaded ? (liveReviews?.length ?? 0) : product.reviews;
+  const { data: liveReviews } = useReviews(product.id);
+  const liveCount = liveReviews?.length ?? 0;
   const liveRating = liveReviews && liveReviews.length > 0
     ? Math.round(liveReviews.reduce((s, r) => s + r.rating, 0) / liveReviews.length * 10) / 10
     : 0;

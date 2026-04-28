@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import type { CSSProperties } from 'react';
 import { useUser, useAuth } from '@clerk/clerk-react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -46,11 +46,75 @@ function avatarColor(name: string): string {
   return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
 }
 
-interface ReviewCardProps {
-  review: Review;
+function HelpfulButton({ review, onSignInRequired }: { review: Review; onSignInRequired: () => void }) {
+  const { isSignedIn, user } = useUser();
+  const { getToken } = useAuth();
+
+  const isOwn = !!user && review.userId === user.id;
+  const [voters, setVoters] = useState<string[]>(review.helpfulVoters ?? []);
+  const [loading, setLoading] = useState(false);
+
+  const voted = !!user && voters.includes(user.id);
+  const count = voters.length;
+
+  if (isOwn) return (
+    <div style={{ display: 'flex', alignItems: 'center', lineHeight: 1, gap: 6, fontSize: 12, fontFamily: '"Geist", sans-serif', color: 'var(--ink-40)' }}>
+      <Icon name="thumbs-up" size={12} stroke="currentColor" />
+      {count > 0 ? `Útil · ${count}` : 'Útil · 0'}
+    </div>
+  );
+
+  const handleClick = async () => {
+    if (voted || loading) return;
+    if (!isSignedIn) { onSignInRequired(); return; }
+    const uid = user!.id;
+    setVoters((v) => [...v, uid]);
+    setLoading(true);
+    try {
+      const token = await getToken();
+      const result = await api.reviews.helpful(review._id, token!);
+      setVoters(result.helpfulVoters ?? [...voters, uid]);
+    } catch {
+      setVoters((v) => v.filter((id) => id !== uid));
+    }
+    setLoading(false);
+  };
+
+  return (
+    <button
+      onClick={handleClick}
+      disabled={voted}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        lineHeight: 1,
+        gap: 6,
+        border: `1px solid ${voted ? 'var(--ink)' : 'var(--ink-20)'}`,
+        borderRadius: 999,
+        padding: '5px 14px',
+        background: voted ? 'var(--ink)' : 'transparent',
+        color: voted ? 'var(--cream)' : 'var(--ink-60)',
+        fontSize: 12,
+        fontFamily: '"Geist", sans-serif',
+        cursor: voted ? 'default' : 'pointer',
+        transition: 'all 0.2s',
+        opacity: loading ? 0.6 : 1,
+      }}
+      onMouseEnter={(e) => { if (!voted) { e.currentTarget.style.borderColor = 'var(--ink)'; e.currentTarget.style.color = 'var(--ink)'; } }}
+      onMouseLeave={(e) => { if (!voted) { e.currentTarget.style.borderColor = 'var(--ink-20)'; e.currentTarget.style.color = 'var(--ink-60)'; } }}
+    >
+      <Icon name="thumbs-up" size={12} stroke={voted ? 'var(--cream)' : 'currentColor'} />
+      {count > 0 ? `Útil · ${count}` : 'Útil'}
+    </button>
+  );
 }
 
-function ReviewCard({ review }: ReviewCardProps) {
+interface ReviewCardProps {
+  review: Review;
+  onSignInRequired: () => void;
+}
+
+function ReviewCard({ review, onSignInRequired }: ReviewCardProps) {
   const bg = avatarColor(review.userName);
   return (
     <div
@@ -65,25 +129,33 @@ function ReviewCard({ review }: ReviewCardProps) {
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-        <div
-          style={{
-            width: 40,
-            height: 40,
-            borderRadius: 999,
-            background: bg,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            flexShrink: 0,
-            color: 'white',
-            fontFamily: '"Geist", sans-serif',
-            fontWeight: 600,
-            fontSize: 14,
-            letterSpacing: '0.02em',
-          }}
-        >
-          {initials(review.userName)}
-        </div>
+        {review.userAvatar ? (
+          <img
+            src={review.userAvatar}
+            alt={review.userName}
+            style={{ width: 40, height: 40, borderRadius: 999, objectFit: 'cover', flexShrink: 0 }}
+          />
+        ) : (
+          <div
+            style={{
+              width: 40,
+              height: 40,
+              borderRadius: 999,
+              background: bg,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0,
+              color: 'white',
+              fontFamily: '"Geist", sans-serif',
+              fontWeight: 600,
+              fontSize: 14,
+              letterSpacing: '0.02em',
+            }}
+          >
+            {initials(review.userName)}
+          </div>
+        )}
         <div style={{ flex: 1, minWidth: 0 }}>
           <div
             style={{
@@ -139,6 +211,10 @@ function ReviewCard({ review }: ReviewCardProps) {
       >
         {review.body}
       </p>
+
+      <div style={{ display: 'flex', justifyContent: 'flex-end', paddingTop: 8, borderTop: '1px solid var(--ink-06)' }}>
+        <HelpfulButton review={review} onSignInRequired={onSignInRequired} />
+      </div>
     </div>
   );
 }
@@ -210,6 +286,15 @@ export function ReviewSection({ productId }: ReviewSectionProps) {
   const [signInOpen, setSignInOpen] = useState(false);
   const [formError, setFormError] = useState('');
   const [justSubmitted, setJustSubmitted] = useState(false);
+
+  useEffect(() => {
+    setShowForm(false);
+    setJustSubmitted(false);
+    setFormRating(0);
+    setFormTitle('');
+    setFormBody('');
+    setFormError('');
+  }, [productId]);
 
   const total = reviews.length;
   const avg = total > 0 ? reviews.reduce((s, r) => s + r.rating, 0) / total : 0;
@@ -609,16 +694,23 @@ export function ReviewSection({ productId }: ReviewSectionProps) {
               </div>
 
               {formError && (
-                <p
+                <div
                   style={{
-                    margin: 0,
+                    background: 'oklch(0.97 0.03 25)',
+                    border: '1px solid oklch(0.88 0.1 25)',
+                    borderRadius: 12,
+                    padding: '12px 16px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 10,
                     fontFamily: '"Geist", sans-serif',
                     fontSize: 13,
-                    color: 'var(--coral)',
+                    color: 'oklch(0.42 0.18 25)',
                   }}
                 >
+                  <Icon name="alert-circle" size={16} stroke="oklch(0.5 0.18 25)" />
                   {formError}
-                </p>
+                </div>
               )}
 
               <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
@@ -761,7 +853,7 @@ export function ReviewSection({ productId }: ReviewSectionProps) {
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
               {reviews.map((review) => (
-                <ReviewCard key={review._id} review={review} />
+                <ReviewCard key={review._id} review={review} onSignInRequired={() => setSignInOpen(true)} />
               ))}
             </div>
           )}

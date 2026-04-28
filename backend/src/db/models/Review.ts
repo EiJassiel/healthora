@@ -8,6 +8,8 @@ const ReviewSchema = new Schema(
     rating: { type: Number, required: true, min: 1, max: 5 },
     title: String,
     body: { type: String, required: true },
+    userAvatar: String,
+    helpfulVoters: { type: [String], default: [] },
   },
   { timestamps: true }
 );

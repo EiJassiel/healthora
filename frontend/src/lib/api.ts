@@ -67,6 +67,7 @@ export const api = {
       data: { productId: string; rating: number; title?: string; body: string },
       token: string
     ) => request<Review>('/reviews', { method: 'POST', body: JSON.stringify(data) }, token),
+    helpful: (id: string, token: string) => request<Review>(`/reviews/${id}/helpful`, { method: 'PATCH' }, token),
   },
   admin: {
     access: (token: string) => request<{ allowed: boolean; role: string; name?: string; email?: string }>('/admin/access', undefined, token),

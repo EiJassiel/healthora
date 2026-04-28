@@ -126,6 +126,8 @@ export interface Review {
   rating: number;
   title?: string;
   body: string;
+  userAvatar?: string;
+  helpfulVoters: string[];
   createdAt: string;
   updatedAt: string;
 }
