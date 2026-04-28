@@ -388,35 +388,60 @@ export function Header({ onNav, onOpenCart }: HeaderProps) {
         <a className="nav-link" onClick={() => {
             onNav('landing', undefined, true);
             setTimeout(() => {
-              document.getElementById('categorias')?.scrollIntoView({ behavior: 'smooth' });
+              const el = document.getElementById('categorias');
+              if (el) {
+                const rect = el.getBoundingClientRect();
+                const offset = 80;
+                window.scrollTo({ top: window.scrollY + rect.top - offset, behavior: 'smooth' });
+              }
             }, 100);
           }}>Categorías</a>
 
         <a className="nav-link" onClick={() => {
             onNav('landing', undefined, true);
             setTimeout(() => {
-              document.getElementById('bestsellers')?.scrollIntoView({ behavior: 'smooth' });
+              const el = document.getElementById('bestsellers');
+              if (el) {
+                const rect = el.getBoundingClientRect();
+                const offset = 80;
+                window.scrollTo({ top: window.scrollY + rect.top - offset, behavior: 'smooth' });
+              }
             }, 100);
           }}>Best sellers</a>
 
         <a className="nav-link" onClick={() => {
             onNav('landing', undefined, true);
             setTimeout(() => {
-              document.getElementById('ofertas')?.scrollIntoView({ behavior: 'smooth' });
+              const el = document.getElementById('ofertas');
+              if (el) {
+                const rect = el.getBoundingClientRect();
+                const offset = 80;
+                window.scrollTo({ top: window.scrollY + rect.top - offset, behavior: 'smooth' });
+              }
             }, 100);
           }}>Ofertas</a>
 
         <a className="nav-link" onClick={() => {
             onNav('landing', undefined, true);
             setTimeout(() => {
-              document.getElementById('nuevos')?.scrollIntoView({ behavior: 'smooth' });
+              const el = document.getElementById('nuevos');
+              if (el) {
+                const rect = el.getBoundingClientRect();
+                const offset = 80;
+                window.scrollTo({ top: window.scrollY + rect.top - offset, behavior: 'smooth' });
+              }
             }, 100);
           }}>Recién llegados</a>
 
         <a className="nav-link" onClick={() => {
             onNav('landing', undefined, true);
             setTimeout(() => {
-              document.getElementById('marcas')?.scrollIntoView({ behavior: 'smooth' });
+              const el = document.getElementById('marcas');
+              if (el) {
+                const rect = el.getBoundingClientRect();
+                const offset = 80;
+                window.scrollTo({ top: window.scrollY + rect.top - offset, behavior: 'smooth' });
+              }
             }, 100);
           }}>Marcas</a>
       </nav>
