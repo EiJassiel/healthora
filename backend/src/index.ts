@@ -15,6 +15,7 @@ import { adminUsersRouter } from './routes/admin/adminUsers';
 import { adminSalesRouter } from './routes/admin/adminSales';
 import { adminEarningsRouter } from './routes/admin/adminEarnings';
 import { accountRouter } from './routes/account';
+import { sendOrderConfirmationEmail } from './lib/email';
 
 await connectDB();
 
@@ -38,6 +39,31 @@ app.route('/admin/sales', adminSalesRouter);
 app.route('/admin/earnings', adminEarningsRouter);
 
 app.get('/health', (c) => c.json({ status: 'ok' }));
+
+app.post('/test-email', async (c) => {
+  const { email, name } = await c.req.json();
+  await sendOrderConfirmationEmail({
+    customerName: name || 'Test User',
+    customerEmail: email,
+    orderId: 'test-order-12345678',
+    items: [
+      { productId: 'test-1', productName: 'Producto de prueba', qty: 1, price: 29.99 }
+    ],
+    subtotal: 29.99,
+    tax: 2.10,
+    shipping: 6.90,
+    total: 38.99,
+    address: {
+      name: name || 'Test User',
+      phone: '1234567890',
+      address: 'Calle Falsa 123',
+      city: 'Ciudad de Mexico',
+      postal: '06600'
+    },
+    createdAt: new Date(),
+  });
+  return c.json({ success: true, message: 'Email sent to ' + email });
+});
 
 const port = Number(process.env.PORT) || 3001;
 

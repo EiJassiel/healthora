@@ -3,6 +3,7 @@ import { stripe } from '../lib/stripe';
 import { Order } from '../db/models/Order';
 import { Product } from '../db/models/Product';
 import { normalizeOrder } from '../lib/orderStatus';
+import { sendOrderConfirmationEmail } from '../lib/email';
 
 type CheckoutAddress = {
   name: string;
@@ -18,25 +19,34 @@ type CheckoutCartItem = {
 };
 
 export const webhooksRouter = new Hono().post('/stripe', async (c) => {
+  console.log('[WEBHOOK] Received request');
   const sig = c.req.header('stripe-signature');
-  if (!sig) return c.json({ error: 'Missing signature' }, 400);
+  if (!sig) {
+    console.log('[WEBHOOK] Missing signature header');
+    return c.json({ error: 'Missing signature' }, 400);
+  }
 
   let event;
   try {
     const rawBody = await c.req.text();
     event = stripe.webhooks.constructEvent(rawBody, sig, process.env.STRIPE_WEBHOOK_SECRET!);
-  } catch {
+  } catch (err) {
+    console.error('[WEBHOOK] Signature verification failed:', err);
     return c.json({ error: 'Invalid signature' }, 400);
   }
 
   if (event.type === 'checkout.session.completed') {
     const session = event.data.object;
+    console.log('[WEBHOOK] checkout.session.completed received for session:', session.id);
     const existingOrder = await Order.findOne({ stripeSessionId: session.id }).lean();
     if (!existingOrder) {
       try {
         const metadata = session.metadata || {};
         const cartItems = JSON.parse(metadata.cartItems || '[]') as CheckoutCartItem[];
         const address = JSON.parse(metadata.address || '{}') as CheckoutAddress;
+
+        const customerEmail = metadata.customerEmail || session.customer_email;
+        console.log('[WEBHOOK] Customer email:', customerEmail);
 
         const productIds = cartItems.map((item) => item.productId);
         const products = await Product.find({ id: { $in: productIds }, active: true }).lean();
@@ -47,7 +57,8 @@ export const webhooksRouter = new Hono().post('/stripe', async (c) => {
             const product = products.find((entry) => entry.id === item.productId);
             if (!product) throw new Error(`Product not found for ${item.productId}`);
             if (product.stock < item.qty) throw new Error(`Insufficient stock for ${product.name}`);
-            return { productId: product.id, productName: product.name, qty: item.qty, price: product.price };
+            const primaryImage = product.images?.find((img) => img.isPrimary)?.url || product.images?.[0]?.url || product.imageUrl || '';
+            return { productId: product.id, productName: product.name, qty: item.qty, price: product.price, imageUrl: primaryImage, category: product.category };
           });
 
           const subtotal = lineItems.reduce((sum, item) => sum + item.price * item.qty, 0);
@@ -55,10 +66,10 @@ export const webhooksRouter = new Hono().post('/stripe', async (c) => {
           const shipping = Number(metadata.shipping || 0);
           const total = Math.round((subtotal + tax + shipping) * 100) / 100;
 
-          await Order.create({
+          const order = await Order.create({
             customerId: metadata.customerId,
             customerName: metadata.customerName,
-            customerEmail: metadata.customerEmail,
+            customerEmail: customerEmail,
             items: lineItems,
             subtotal,
             tax,
@@ -72,6 +83,26 @@ export const webhooksRouter = new Hono().post('/stripe', async (c) => {
             address,
           });
 
+          console.log('[WEBHOOK] Order created:', order._id, 'Email:', customerEmail);
+
+          try {
+            await sendOrderConfirmationEmail({
+              customerName: metadata.customerName,
+              customerEmail: customerEmail,
+              orderId: order._id.toString(),
+              items: lineItems,
+              subtotal,
+              tax,
+              shipping,
+              total,
+              address,
+              createdAt: order.createdAt,
+            });
+            console.log('[WEBHOOK] Email sent successfully');
+          } catch (emailError) {
+            console.error('[WEBHOOK] Email error:', emailError);
+          }
+
           for (const item of lineItems) {
             await Product.findOneAndUpdate({ id: item.productId }, { $inc: { stock: -item.qty } });
           }
@@ -80,6 +111,7 @@ export const webhooksRouter = new Hono().post('/stripe', async (c) => {
         console.error('[WEBHOOK] Failed to create paid order:', error);
       }
     } else {
+      console.log('[WEBHOOK] Order already exists for session:', session.id);
       const normalizedExisting = normalizeOrder(existingOrder);
       if (normalizedExisting.paymentStatus !== 'paid') {
         await Order.findOneAndUpdate(
@@ -95,5 +127,6 @@ export const webhooksRouter = new Hono().post('/stripe', async (c) => {
     }
   }
 
+  console.log('[WEBHOOK] Request processed');
   return c.json({ received: true });
 });

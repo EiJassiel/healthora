@@ -11,6 +11,8 @@ const OrderSchema = new Schema(
         productName: String,
         qty: Number,
         price: Number,
+        imageUrl: String,
+        category: String,
       },
     ],
     subtotal: Number,

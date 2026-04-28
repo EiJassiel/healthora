@@ -266,3 +266,45 @@ node_modules/
 ```
 
 Los reportes temporales, scripts locales de utilidad y herramientas de agentes no se versionen aunque estén en el árbol local.
+
+---
+
+## Email de Confirmación de Pedido
+
+El sistema envía un email de confirmación al cliente después de cada compra exitosa. Esto se hace desde la página de éxito (no requiere webhook de Stripe).
+
+### Configuración de Gmail SMTP
+
+Para que funcione, necesitas configurar un Gmail que envíe los correos:
+
+1. **Crear o usar una cuenta de Gmail** (ej: `healthora24@gmail.com`)
+
+2. **Activar verificación en 2 pasos** (obligatorio para contraseñas de aplicación):
+   - Ve a https://myaccount.google.com/security
+   - Activa "Verificación en 2 pasos"
+
+3. **Generar contraseña de aplicación**:
+   - Ve a https://myaccount.google.com/security
+   - Busca "Contraseñas de aplicaciones" (al final de la página)
+   - Selecciona: App = "Correo", Dispositivo = "Otro (especificar)"
+   - Te dará una contraseña de 16 caracteres
+
+4. **Configurar en `backend/.env`**:
+
+```env
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USER=tu-gmail@gmail.com
+SMTP_PASS=la-contraseña-de-16-caracteres
+SMTP_FROM=Healthora <noreply@healthora.com>
+```
+
+### Nota Importante
+
+- El email de confirmación se envía **al correo del usuario que hizo la compra** (cualquier cuenta: Gmail, Outlook, Yahoo, etc.)
+- El `SMTP_USER` es solo la cuenta que **envía** los mensajes
+- No necesitas verificar los destinatarios - pueden ser cualquier email
+
+### Fallback sin webhook
+
+El email se envía desde la página de éxito (`/orders`), por lo que funciona incluso sin el Stripe CLI corriendo. El webhook de Stripe es opcional para crear la orden inmediatamente, pero el email de confirmación siempre se envía cuando el usuario llega a la página de éxito después de pagar.

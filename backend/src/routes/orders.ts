@@ -5,6 +5,7 @@ import { Order } from '../db/models/Order';
 import { Product } from '../db/models/Product';
 import { normalizeOrder } from '../lib/orderStatus';
 import { stripe } from '../lib/stripe';
+import { sendOrderConfirmationEmail } from '../lib/email';
 
 type CheckoutAddress = {
   name: string;
@@ -36,7 +37,8 @@ async function createOrderFromPaidSession(stripeSessionId: string, clerkId: stri
     const product = products.find((entry) => entry.id === item.productId);
     if (!product) throw new Error(`Product not found for ${item.productId}`);
     if (product.stock < item.qty) throw new Error(`Insufficient stock for ${product.name}`);
-    return { productId: product.id, productName: product.name, qty: item.qty, price: product.price };
+    const primaryImage = product.images?.find((img) => img.isPrimary)?.url || product.images?.[0]?.url || product.imageUrl || '';
+    return { productId: product.id, productName: product.name, qty: item.qty, price: product.price, imageUrl: primaryImage, category: product.category };
   });
 
   const subtotal = lineItems.reduce((sum, item) => sum + item.price * item.qty, 0);
@@ -66,6 +68,27 @@ async function createOrderFromPaidSession(stripeSessionId: string, clerkId: stri
 
   for (const item of lineItems) {
     await Product.findOneAndUpdate({ id: item.productId }, { $inc: { stock: -item.qty } });
+  }
+
+  const customerEmail = metadata.customerEmail || session.customer_email;
+  if (customerEmail) {
+    try {
+      await sendOrderConfirmationEmail({
+        customerName: metadata.customerName,
+        customerEmail: customerEmail,
+        orderId: createdOrder._id.toString(),
+        items: lineItems,
+        subtotal,
+        tax,
+        shipping,
+        total,
+        address,
+        createdAt: createdOrder.createdAt,
+      });
+      console.log('[ORDERS] Confirmation email sent to:', customerEmail);
+    } catch (emailError) {
+      console.error('[ORDERS] Failed to send confirmation email:', emailError);
+    }
   }
 
   return normalizeOrder(createdOrder.toObject());
