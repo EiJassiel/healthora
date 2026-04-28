@@ -196,7 +196,7 @@ export function SignInModal({ open, onClose }: SignInModalProps) {
         onClick={(e) => e.stopPropagation()}
         style={{
           width: '100%', maxWidth: 780, background: 'var(--cream)',
-          border: '1px solid var(--ink-06)', borderRadius: 28,
+          borderRadius: 28,
           boxShadow: '0 32px 90px -40px rgba(0,0,0,0.35)',
           display: 'grid', gridTemplateColumns: '1fr 1.1fr', overflow: 'hidden',
         }}
