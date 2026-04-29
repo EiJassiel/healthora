@@ -64,9 +64,11 @@ async function createOrderFromPaidSession(stripeSessionId: string, clerkId: stri
   });
 
   const subtotal = lineItems.reduce((sum, item) => sum + item.price * item.qty, 0);
+  const discountCode = metadata.discountCode || undefined;
+  const discountAmount = Number(metadata.discountAmount || 0);
   const tax = Number(metadata.tax || 0);
   const shipping = Number(metadata.shipping || 0);
-  const total = Math.round((subtotal + tax + shipping) * 100) / 100;
+  const total = Math.round((subtotal - discountAmount + tax + shipping) * 100) / 100;
 
   const existing = await Order.findOne({ stripeSessionId }).lean();
   if (existing) return normalizeOrder(existing);
@@ -77,6 +79,8 @@ async function createOrderFromPaidSession(stripeSessionId: string, clerkId: stri
     customerEmail: metadata.customerEmail,
     items: lineItems,
     subtotal,
+    discountCode,
+    discountAmount,
     tax,
     shipping,
     total,
@@ -101,6 +105,8 @@ async function createOrderFromPaidSession(stripeSessionId: string, clerkId: stri
         orderId: createdOrder._id.toString(),
         items: lineItems,
         subtotal,
+        discountCode,
+        discountAmount,
         tax,
         shipping,
         total,

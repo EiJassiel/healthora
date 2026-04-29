@@ -16,6 +16,8 @@ const OrderSchema = new Schema(
       },
     ],
     subtotal: Number,
+    discountCode: String,
+    discountAmount: { type: Number, default: 0 },
     tax: Number,
     shipping: Number,
     total: Number,

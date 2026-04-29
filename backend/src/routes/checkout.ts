@@ -2,18 +2,25 @@ import { Hono } from 'hono';
 import { clerkAuth } from '../middleware/clerkAuth';
 import type { AppEnv } from '../types/hono';
 import { Product } from '../db/models/Product';
+import { Order } from '../db/models/Order';
 import { stripe } from '../lib/stripe';
+import { getPromotion } from '../lib/promotions';
 
 type CheckoutBody = {
   items: { productId: string; qty: number }[];
   address: { name: string; phone: string; address: string; city: string; postal: string };
+  promoCode?: string;
 };
+
+function roundMoney(value: number): number {
+  return Math.round(value * 100) / 100;
+}
 
 export const checkoutRouter = new Hono<AppEnv>()
   .use('*', clerkAuth)
   .post('/session', async (c) => {
     const body = await c.req.json<CheckoutBody>();
-    const { items, address } = body;
+    const { items, address, promoCode } = body;
     const user = c.get('user');
 
     const productIds = items.map((i) => i.productId);
@@ -29,9 +36,30 @@ export const checkoutRouter = new Hono<AppEnv>()
       return { productId: p.id, productName: p.name, qty: item.qty, price: p.price };
     });
 
-    const subtotal = lineItems.reduce((s, i) => s + i.price * i.qty, 0);
-    const tax = Math.round(subtotal * 0.07 * 100) / 100;
-    const shipping = subtotal >= 50 ? 0 : 6.9;
+    const subtotal = roundMoney(lineItems.reduce((s, i) => s + i.price * i.qty, 0));
+    const promotion = promoCode
+      ? getPromotion(promoCode, lineItems.map((item) => ({ product: { category: products.find((product) => product.id === item.productId)?.category || '', price: item.price }, qty: item.qty })))
+      : null;
+
+    if (promoCode && !promotion) {
+      return c.json({ error: 'Código inválido o sin productos elegibles' }, 400);
+    }
+
+    if (promotion?.code === 'BIENVENIDA') {
+      const previousPaidOrder = await Order.findOne({
+        customerId: user.clerkId,
+        $or: [{ paymentStatus: 'paid' }, { status: 'paid' }],
+      }).select('_id').lean();
+
+      if (previousPaidOrder) {
+        return c.json({ error: 'BIENVENIDA solo aplica en tu primera compra.' }, 400);
+      }
+    }
+
+    const discountAmount = promotion?.discountAmount ?? 0;
+    const discountedSubtotal = roundMoney(Math.max(0, subtotal - discountAmount));
+    const tax = roundMoney(discountedSubtotal * 0.07);
+    const shipping = discountedSubtotal >= 50 || discountedSubtotal === 0 ? 0 : 6.9;
 
     try {
       const origin = c.req.header('origin');
@@ -39,20 +67,51 @@ export const checkoutRouter = new Hono<AppEnv>()
         mode: 'payment',
         payment_method_types: ['card'],
         customer_email: user.email,
-        line_items: lineItems.map((i) => ({
+        line_items: [
+          ...lineItems.map((i) => ({
           price_data: {
             currency: 'usd',
             unit_amount: Math.round(i.price * 100),
             product_data: { name: i.productName },
           },
           quantity: i.qty,
-        })),
+          })),
+          ...(shipping > 0 ? [{
+            price_data: {
+              currency: 'usd',
+              unit_amount: Math.round(shipping * 100),
+              product_data: { name: 'Envío' },
+            },
+            quantity: 1,
+          }] : []),
+          ...(tax > 0 ? [{
+            price_data: {
+              currency: 'usd',
+              unit_amount: Math.round(tax * 100),
+              product_data: { name: 'Impuestos' },
+            },
+            quantity: 1,
+          }] : []),
+        ],
+        ...(discountAmount > 0 ? {
+          discounts: [{
+            coupon: await stripe.coupons.create({
+              amount_off: Math.round(discountAmount * 100),
+              currency: 'usd',
+              name: promotion?.code,
+              duration: 'once',
+            }).then((coupon) => coupon.id),
+          }],
+        } : {}),
         metadata: {
           customerId: user.clerkId,
           customerName: user.name || '',
           customerEmail: user.email || '',
           cartItems: JSON.stringify(items),
           address: JSON.stringify(address),
+          discountCode: promotion?.code || '',
+          discountAmount: String(discountAmount),
+          discountedSubtotal: String(discountedSubtotal),
           tax: String(tax),
           shipping: String(shipping),
         },

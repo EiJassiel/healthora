@@ -428,7 +428,10 @@ export function Landing({ onNav, onOpenProduct, onAdd }: LandingProps) {
             <div style={{ maxWidth: 420 }}>
               <div style={{ ...headKicker, color: 'var(--ink-60)' }}>Promoción destacada</div>
               <h3 style={{ fontFamily: '"Instrument Serif", serif', fontSize: 56, letterSpacing: '-0.03em', lineHeight: 0.98, margin: '12px 0 20px', color: 'var(--ink)' }}>25% OFF en tu<br />rutina de skincare</h3>
-              <p style={{ fontSize: 15, lineHeight: 1.5, color: 'var(--ink-60)', marginBottom: 28, maxWidth: 360 }}>Retinol, hidratantes y tratamientos seleccionados. Válido hasta el 30 de abril con el código <strong>PIEL25</strong>.</p>
+              <p style={{ fontSize: 15, lineHeight: 1.5, color: 'var(--ink-60)', marginBottom: 12, maxWidth: 380 }}>Aplica en productos de <strong>Salud de la piel</strong> e <strong>Hidratantes</strong>. Válido hasta el 30 de abril con el código <strong>PIEL25</strong>.</p>
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, marginBottom: 28, padding: '8px 12px', borderRadius: 999, background: 'rgba(8, 6, 13, 0.08)', color: 'var(--ink)', fontSize: 11, fontFamily: '"JetBrains Mono", monospace', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+                Categorías: Salud de la piel · Hidratantes
+              </div>
               <Button variant="primary" onClick={() => onNav('catalog')} icon={<Icon name="arrow-right" size={14} />}>Comprar rutina</Button>
             </div>
             <div style={{ position: 'absolute', right: 40, bottom: 40, display: 'flex', gap: 16 }}>
@@ -439,8 +442,8 @@ export function Landing({ onNav, onOpenProduct, onAdd }: LandingProps) {
           <div style={{ background: 'var(--cream-2)', borderRadius: 28, padding: 40, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', minHeight: 360 }}>
             <div>
               <div style={headKicker}>Club Healthora</div>
-              <h3 style={{ fontFamily: '"Instrument Serif", serif', fontSize: 36, letterSpacing: '-0.02em', lineHeight: 1, margin: '12px 0 16px' }}>Muestras <em style={{ color: 'var(--green)' }}>gratis</em> en cada orden</h3>
-              <p style={{ fontSize: 14, lineHeight: 1.5, color: 'var(--ink-60)', marginBottom: 20 }}>Regístrate y elige 2 muestras por compra mayor a $60.</p>
+              <h3 style={{ fontFamily: '"Instrument Serif", serif', fontSize: 36, letterSpacing: '-0.02em', lineHeight: 1, margin: '12px 0 16px' }}>Una muestra <em style={{ color: 'var(--green)' }}>gratis</em> en órdenes premium</h3>
+              <p style={{ fontSize: 14, lineHeight: 1.5, color: 'var(--ink-60)', marginBottom: 20 }}>Regístrate y recibe 1 muestra seleccionada en compras mayores a $200.</p>
             </div>
             <Button variant="primary" full onClick={() => onNav('club')}>Unirme al club</Button>
           </div>
@@ -503,20 +506,11 @@ export function Landing({ onNav, onOpenProduct, onAdd }: LandingProps) {
         </div>
       </RevealSection>
 
-      {/* BRANDS */}
-      <RevealSection id="marcas" style={{ padding: '80px 0 0' }} delay={130}>
-        <div style={{ padding: '0 40px', marginBottom: 40 }}>
-          <div style={headKicker}>04 · Marcas</div>
-          <h2 style={headTitle}>Las marcas en las que <em style={{ color: 'var(--green)' }}>confías</em></h2>
-        </div>
-        <BrandsMarquee onNav={onNav} />
-      </RevealSection>
-
       {/* FEATURED */}
-      <RevealSection id="nuevos" style={{ padding: '80px 40px 0' }} delay={150}>
+      <RevealSection id="nuevos" style={{ padding: '80px 40px 0' }} delay={130}>
         <div style={{ display: 'flex', alignItems: 'end', justifyContent: 'space-between', marginBottom: 32 }}>
           <div>
-            <div style={headKicker}>05 · Nuevos ingresos</div>
+            <div style={headKicker}>04 · Nuevos ingresos</div>
             <h2 style={headTitle}>Recién <em style={{ color: 'var(--green)' }}>llegados</em></h2>
           </div>
           <a onClick={() => onNav('catalog')} style={seeAllLink}>Ver catálogo completo <Icon name="arrow-right" size={14} /></a>
@@ -524,6 +518,15 @@ export function Landing({ onNav, onOpenProduct, onAdd }: LandingProps) {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 20 }}>
           {featured.map((p) => <ProductCard key={p.id} product={p} onClick={onOpenProduct} onAdd={onAdd} />)}
         </div>
+      </RevealSection>
+
+      {/* BRANDS */}
+      <RevealSection id="marcas" style={{ padding: '80px 0 0' }} delay={150}>
+        <div style={{ padding: '0 40px', marginBottom: 40 }}>
+          <div style={headKicker}>05 · Marcas</div>
+          <h2 style={headTitle}>Las marcas en las que <em style={{ color: 'var(--green)' }}>confías</em></h2>
+        </div>
+        <BrandsMarquee onNav={onNav} />
       </RevealSection>
     </main>
   );

@@ -24,7 +24,7 @@ export function Club({ onNav }: ClubProps) {
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 20, marginBottom: 64 }}>
         {[
-          { icon: 'gift', title: 'Muestras gratis', desc: 'Recibe 2 muestras seleccionadas en cada orden mayor a $60.' },
+          { icon: 'gift', title: 'Muestra premium', desc: 'Recibe 1 muestra seleccionada en órdenes mayores a $200.' },
           { icon: 'percent', title: 'Descuentos exclusivos', desc: 'Accede a ofertas solo para miembros antes que nadie.' },
           { icon: 'truck', title: 'Envío prioritario', desc: 'Tus pedidos se procesan primero, sin costo extra.' },
         ].map((b) => (

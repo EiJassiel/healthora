@@ -1,6 +1,6 @@
 const msgs = [
   'Envío gratis en compras mayores a $50',
-  'Obtén muestras gratis en órdenes seleccionadas',
+  'Muestra gratis en órdenes mayores a $200',
   'Nuevos clientes: 15% con código BIENVENIDA',
   'Entregas en 24–48h en toda la región',
   'Productos verificados por farmacéuticos',

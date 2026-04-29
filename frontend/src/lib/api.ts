@@ -61,7 +61,7 @@ export const api = {
   },
   checkout: {
     createSession: (
-      body: { items: { productId: string; qty: number }[]; address: object },
+      body: { items: { productId: string; qty: number }[]; address: object; promoCode?: string },
       token: string
     ) => request<{ url: string }>('/checkout/session', { method: 'POST', body: JSON.stringify(body) }, token),
   },
@@ -73,6 +73,10 @@ export const api = {
       token: string
     ) => request<Review>('/reviews', { method: 'POST', body: JSON.stringify(data) }, token),
     helpful: (id: string, token: string) => request<Review>(`/reviews/${id}/helpful`, { method: 'PATCH' }, token),
+  },
+  newsletter: {
+    subscribe: (email: string) =>
+      request<{ success: boolean; message: string }>('/newsletter/subscribe', { method: 'POST', body: JSON.stringify({ email }) }),
   },
   admin: {
     access: (token: string) => request<{ allowed: boolean; role: string; name?: string; email?: string }>('/admin/access', undefined, token),

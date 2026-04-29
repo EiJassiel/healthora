@@ -8,6 +8,7 @@ import { Icon } from '../components/shared/Icon';
 import { SignInModal } from '../components/chrome/SignInModal';
 import { api } from '../lib/api';
 import { useAuth } from '@clerk/clerk-react';
+import { canApplyPromotion, getAvailablePromotionCodes, getPromotion, normalizePromotionCode } from '../lib/promotions';
 
 interface CheckoutProps {
   items: CartItem[];
@@ -41,6 +42,10 @@ const authBtn: CSSProperties = { padding: '14px 18px', borderRadius: 12, border:
 const authLogoWrap: CSSProperties = { width: 28, height: 28, borderRadius: 8, background: 'white', border: '1px solid var(--ink-06)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, boxShadow: '0 6px 14px -12px rgba(0,0,0,0.24)' };
 const authLogoImg: CSSProperties = { width: 18, height: 18, display: 'block' };
 
+function roundMoney(value: number): number {
+  return Math.round(value * 100) / 100;
+}
+
 export function Checkout({ items, onBack }: CheckoutProps) {
   const { isSignedIn, user } = useUser();
   const { getToken } = useAuth();
@@ -58,6 +63,10 @@ export function Checkout({ items, onBack }: CheckoutProps) {
   const [processing, setProcessing] = useState(false);
   const [error, setError] = useState('');
   const [addressError, setAddressError] = useState('');
+  const [promoInput, setPromoInput] = useState('');
+  const [appliedPromoCode, setAppliedPromoCode] = useState('');
+  const [promoError, setPromoError] = useState('');
+  const [hasPaidOrders, setHasPaidOrders] = useState(false);
 
   const isAddressValid = address.name.trim() && address.phone.trim() && address.address.trim() && address.city.trim() && address.postal.trim();
 
@@ -98,10 +107,71 @@ export function Checkout({ items, onBack }: CheckoutProps) {
     };
   }, [getToken, isSignedIn]);
 
-  const subtotal = items.reduce((s, it) => s + it.product.price * it.qty, 0);
-  const shipping = subtotal > 50 ? 0 : 6.90;
-  const tax = subtotal * 0.07;
-  const total = subtotal + shipping + tax;
+  useEffect(() => {
+    if (!isSignedIn) {
+      setHasPaidOrders(false);
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadOrderEligibility = async () => {
+      try {
+        const token = await getToken();
+        if (!token) return;
+        const orders = await api.orders.list(token);
+        if (cancelled) return;
+        const hasPaid = orders.some((order) => order.paymentStatus === 'paid' || order.status === 'paid');
+        setHasPaidOrders(hasPaid);
+        if (hasPaid && appliedPromoCode === 'BIENVENIDA') {
+          setAppliedPromoCode('');
+          setPromoInput('');
+        }
+      } catch (loadError) {
+        console.error('Failed to load order eligibility', loadError);
+      }
+    };
+
+    void loadOrderEligibility();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [appliedPromoCode, getToken, isSignedIn]);
+
+  const subtotal = roundMoney(items.reduce((s, it) => s + it.product.price * it.qty, 0));
+  const appliedPromo = appliedPromoCode ? getPromotion(appliedPromoCode, items) : null;
+  const discountAmount = appliedPromo?.discountAmount ?? 0;
+  const discountedSubtotal = roundMoney(Math.max(0, subtotal - discountAmount));
+  const shipping = discountedSubtotal >= 50 || discountedSubtotal === 0 ? 0 : 6.90;
+  const tax = roundMoney(discountedSubtotal * 0.07);
+  const total = roundMoney(discountedSubtotal + shipping + tax);
+
+  const handleApplyPromo = (code = promoInput) => {
+    const normalizedCode = normalizePromotionCode(code);
+    const promotion = getPromotion(normalizedCode, items);
+
+    if (!normalizedCode) {
+      setPromoError('Ingresa un código de descuento.');
+      return;
+    }
+
+    if (!promotion) {
+      setAppliedPromoCode('');
+      setPromoError('Código inválido o sin productos elegibles.');
+      return;
+    }
+
+    setAppliedPromoCode(promotion.code);
+    setPromoInput(promotion.code);
+    setPromoError('');
+  };
+
+  const handleRemovePromo = () => {
+    setAppliedPromoCode('');
+    setPromoInput('');
+    setPromoError('');
+  };
 
   const handlePay = async () => {
     if (!isAddressValid) {
@@ -116,12 +186,15 @@ export function Checkout({ items, onBack }: CheckoutProps) {
         {
           items: items.map((it) => ({ productId: it.product.id, qty: it.qty })),
           address,
+          promoCode: appliedPromo?.code,
         },
         token!
       );
       window.location.href = url;
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Error al procesar el pago');
+      const message = e instanceof Error ? e.message : 'Error al procesar el pago';
+      if (appliedPromo) setPromoError(message);
+      setError(message);
       setProcessing(false);
     }
   };
@@ -272,8 +345,60 @@ export function Checkout({ items, onBack }: CheckoutProps) {
               </div>
             ))}
           </div>
+          <div style={{ padding: '16px 0', borderTop: '1px solid var(--ink-06)' }}>
+            <label htmlFor="promo-code" style={{ display: 'block', marginBottom: 8, fontSize: 11, fontFamily: '"JetBrains Mono", monospace', textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--ink-60)' }}>
+              Código de descuento
+            </label>
+            <form
+              onSubmit={(event) => {
+                event.preventDefault();
+                handleApplyPromo();
+              }}
+              style={{ display: 'flex', gap: 8 }}
+            >
+              <input
+                id="promo-code"
+                value={promoInput}
+                onChange={(event) => {
+                  setPromoInput(event.target.value.toUpperCase());
+                  setPromoError('');
+                }}
+                placeholder="BIENVENIDA"
+                disabled={processing}
+                style={{ flex: 1, minWidth: 0, height: 44, border: '1px solid var(--ink-20)', borderRadius: 999, background: 'var(--cream)', padding: '0 14px', outline: 'none', color: 'var(--ink)', fontSize: 13, fontFamily: '"JetBrains Mono", monospace', letterSpacing: '0.04em' }}
+              />
+              {appliedPromo ? (
+                <button type="button" onClick={handleRemovePromo} disabled={processing} style={{ height: 44, border: '1px solid var(--ink-20)', borderRadius: 999, background: 'transparent', padding: '0 14px', cursor: processing ? 'not-allowed' : 'pointer', color: 'var(--ink-60)', fontSize: 12, fontFamily: '"Geist", sans-serif' }}>
+                  Quitar
+                </button>
+              ) : (
+                <button type="submit" disabled={processing} style={{ height: 44, border: 'none', borderRadius: 999, background: 'var(--ink)', color: 'var(--cream)', padding: '0 16px', cursor: processing ? 'not-allowed' : 'pointer', fontSize: 12, fontFamily: '"Geist", sans-serif', fontWeight: 600 }}>
+                  Aplicar
+                </button>
+              )}
+            </form>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 10 }}>
+              {getAvailablePromotionCodes().filter((code) => {
+                if (code === 'BIENVENIDA' && hasPaidOrders) return false;
+                if (code === 'PIEL25' && !canApplyPromotion(code, items)) return false;
+                return true;
+              }).map((code) => (
+                <button key={code} type="button" onClick={() => handleApplyPromo(code)} disabled={processing} style={{ border: '1px solid var(--ink-12)', background: appliedPromo?.code === code ? 'var(--lime)' : 'var(--cream)', color: 'var(--ink)', borderRadius: 999, padding: '6px 9px', cursor: processing ? 'not-allowed' : 'pointer', fontSize: 10, fontFamily: '"JetBrains Mono", monospace', letterSpacing: '0.06em' }}>
+                  {code}
+                </button>
+              ))}
+            </div>
+            {appliedPromo && (
+              <div aria-live="polite" style={{ marginTop: 10, padding: 10, borderRadius: 12, background: 'color-mix(in oklab, var(--green) 9%, white)', border: '1px solid color-mix(in oklab, var(--green) 18%, white)', color: 'var(--green)', fontSize: 12, fontFamily: '"Geist", sans-serif', lineHeight: 1.4 }}>
+                {appliedPromo.label}: ahorras ${discountAmount.toFixed(2)}.
+                {appliedPromo.code === 'BIENVENIDA' && <span> Solo válido en tu primera compra pagada.</span>}
+              </div>
+            )}
+            {promoError && <div role="alert" style={{ marginTop: 8, color: 'var(--coral)', fontSize: 12, fontFamily: '"Geist", sans-serif', lineHeight: 1.4 }}>{promoError}</div>}
+          </div>
           <div style={{ padding: '14px 0', borderTop: '1px solid var(--ink-06)' }}>
             <Row k="Subtotal" v={`$${subtotal.toFixed(2)}`} />
+            {discountAmount > 0 && <Row k={`Descuento ${appliedPromo?.code}`} v={<span style={{ color: 'var(--green)' }}>-${discountAmount.toFixed(2)}</span>} />}
             <Row k="Envío" v={shipping === 0 ? 'GRATIS' : `$${shipping.toFixed(2)}`} />
             <Row k="Impuestos" v={`$${tax.toFixed(2)}`} />
           </div>

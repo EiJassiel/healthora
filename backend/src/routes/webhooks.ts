@@ -62,9 +62,11 @@ export const webhooksRouter = new Hono().post('/stripe', async (c) => {
           });
 
           const subtotal = lineItems.reduce((sum, item) => sum + item.price * item.qty, 0);
+          const discountCode = metadata.discountCode || undefined;
+          const discountAmount = Number(metadata.discountAmount || 0);
           const tax = Number(metadata.tax || 0);
           const shipping = Number(metadata.shipping || 0);
-          const total = Math.round((subtotal + tax + shipping) * 100) / 100;
+          const total = Math.round((subtotal - discountAmount + tax + shipping) * 100) / 100;
 
           const order = await Order.create({
             customerId: metadata.customerId,
@@ -72,6 +74,8 @@ export const webhooksRouter = new Hono().post('/stripe', async (c) => {
             customerEmail: customerEmail,
             items: lineItems,
             subtotal,
+            discountCode,
+            discountAmount,
             tax,
             shipping,
             total,
@@ -92,6 +96,8 @@ export const webhooksRouter = new Hono().post('/stripe', async (c) => {
               orderId: order._id.toString(),
               items: lineItems,
               subtotal,
+              discountCode,
+              discountAmount,
               tax,
               shipping,
               total,

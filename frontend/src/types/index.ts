@@ -97,6 +97,8 @@ export interface Order {
   customerEmail: string;
   items: OrderLineItem[];
   subtotal: number;
+  discountCode?: string;
+  discountAmount?: number;
   tax: number;
   shipping: number;
   total: number;

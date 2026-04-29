@@ -17,6 +17,7 @@ import { adminEarningsRouter } from './routes/admin/adminEarnings';
 import { accountRouter } from './routes/account';
 import { sendOrderConfirmationEmail } from './lib/email';
 import { reviewsRouter } from './routes/reviews';
+import { newsletterRouter } from './routes/newsletter';
 
 await connectDB();
 
@@ -29,6 +30,7 @@ app.route('/categories', categoriesRouter);
 app.route('/orders', ordersRouter);
 app.route('/account', accountRouter);
 app.route('/reviews', reviewsRouter);
+app.route('/newsletter', newsletterRouter);
 app.route('/cart', cartRouter);
 app.route('/checkout', checkoutRouter);
 app.route('/webhooks', webhooksRouter);

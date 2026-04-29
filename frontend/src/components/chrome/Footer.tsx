@@ -1,3 +1,6 @@
+import { useEffect, useState, type FormEvent } from 'react';
+import { api } from '../../lib/api';
+
 const cols = [
   { title: 'Comprar', items: ['Vitaminas', 'Medicamentos', 'Cuidado personal', 'Bebé', 'Skincare', 'Fitness', 'Fragancias'] },
   { title: 'Ayuda', items: ['Contacto', 'Preguntas frecuentes', 'Envíos', 'Devoluciones', 'Estado de mi orden'] },
@@ -12,8 +15,67 @@ const socials = [
 ];
 
 export function Footer() {
+  const [email, setEmail] = useState('');
+  const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+  const [message, setMessage] = useState('');
+
+  useEffect(() => {
+    if (!message) return;
+
+    const currentUrl = window.location.href;
+    const clearMessage = () => {
+      setStatus('idle');
+      setMessage('');
+    };
+    const timeoutId = window.setTimeout(clearMessage, status === 'success' ? 6000 : 4500);
+    const intervalId = window.setInterval(() => {
+      if (window.location.href !== currentUrl) clearMessage();
+    }, 400);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+      window.clearInterval(intervalId);
+    };
+  }, [message, status]);
+
+  const handleNewsletterSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const trimmedEmail = email.trim();
+
+    if (!trimmedEmail) {
+      setStatus('error');
+      setMessage('Ingresa tu correo para suscribirte.');
+      return;
+    }
+
+    setStatus('loading');
+    setMessage('');
+
+    try {
+      await api.newsletter.subscribe(trimmedEmail);
+      setStatus('success');
+      setMessage('Te enviamos un correo de confirmación.');
+      setEmail('');
+    } catch (error) {
+      setStatus('error');
+      setMessage(error instanceof Error ? error.message : 'No pudimos completar la suscripción.');
+    }
+  };
+
   return (
     <footer style={{ background: 'var(--green)', color: 'var(--cream)', padding: '64px 40px 32px', borderRadius: '32px 32px 0 0', marginTop: 80 }}>
+      <style>{`
+        .newsletter-input::placeholder { color: rgba(255, 255, 255, 0.44); }
+        .newsletter-input { border-radius: 999px; }
+        .newsletter-input:-webkit-autofill,
+        .newsletter-input:-webkit-autofill:hover,
+        .newsletter-input:-webkit-autofill:focus {
+          -webkit-text-fill-color: var(--cream);
+          caret-color: var(--cream);
+          box-shadow: 0 0 0 1000px #315f42 inset;
+          transition: background-color 9999s ease-in-out 0s;
+        }
+      `}</style>
       <div style={{ display: 'grid', gridTemplateColumns: '1.4fr repeat(3, 1fr) 1.4fr', gap: 48, marginBottom: 64 }}>
         <div>
           <div style={{ fontFamily: '"Instrument Serif", serif', fontSize: 48, letterSpacing: '-0.03em', lineHeight: 0.95, marginBottom: 20 }}>Healthora</div>
@@ -51,10 +113,36 @@ export function Footer() {
         <div>
           <div style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.12em', opacity: 0.6, marginBottom: 20 }}>Newsletter</div>
           <p style={{ fontSize: 14, lineHeight: 1.55, opacity: 0.88, marginBottom: 18, fontFamily: '"Geist", sans-serif' }}>Recibe ofertas, lanzamientos y consejos de bienestar.</p>
-          <div style={{ display: 'flex', background: 'rgba(255,255,255,0.1)', borderRadius: 999, padding: 4, alignItems: 'center' }}>
-            <input placeholder="tu@email.com" style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', color: 'var(--cream)', padding: '10px 16px', fontSize: 13, fontFamily: '"Geist", sans-serif' }} />
-            <button style={{ background: 'var(--lime)', color: 'var(--ink)', border: 'none', padding: '10px 18px', borderRadius: 999, cursor: 'pointer', fontFamily: '"Geist", sans-serif', fontSize: 13, fontWeight: 500 }}>Suscribirme</button>
-          </div>
+          <form onSubmit={handleNewsletterSubmit} style={{ display: 'flex', background: '#315f42', borderRadius: 999, padding: 4, alignItems: 'center' }}>
+            <input
+              className="newsletter-input"
+              type="email"
+              value={email}
+              onChange={(e) => {
+                setEmail(e.target.value);
+                if (status !== 'loading') {
+                  setStatus('idle');
+                  setMessage('');
+                }
+              }}
+              placeholder="tu@email.com"
+              autoComplete="email"
+              disabled={status === 'loading'}
+              style={{ flex: 1, minWidth: 0, background: 'transparent', border: 'none', outline: 'none', color: 'var(--cream)', WebkitTextFillColor: 'var(--cream)', caretColor: 'var(--cream)', padding: '10px 16px', fontSize: 13, fontFamily: '"Geist", sans-serif', opacity: status === 'loading' ? 0.7 : 1 }}
+            />
+            <button
+              type="submit"
+              disabled={status === 'loading'}
+              style={{ background: 'var(--lime)', color: 'var(--ink)', border: 'none', padding: '10px 18px', borderRadius: 999, cursor: status === 'loading' ? 'wait' : 'pointer', fontFamily: '"Geist", sans-serif', fontSize: 13, fontWeight: 500, opacity: status === 'loading' ? 0.72 : 1 }}
+            >
+              {status === 'loading' ? 'Enviando...' : 'Suscribirme'}
+            </button>
+          </form>
+          {message && (
+            <p style={{ margin: '10px 0 0', fontSize: 12, lineHeight: 1.45, fontFamily: '"Geist", sans-serif', color: status === 'success' ? 'var(--lime)' : '#ffd7d7' }}>
+              {message}
+            </p>
+          )}
         </div>
       </div>
       <div style={{ borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: 24, display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontFamily: '"JetBrains Mono", monospace', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.12em', opacity: 0.6 }}>

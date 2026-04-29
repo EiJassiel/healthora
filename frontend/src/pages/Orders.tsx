@@ -203,13 +203,14 @@ function OrderDetail({
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {([
             { label: 'Subtotal de productos', value: order.subtotal },
+            ...(order.discountAmount && order.discountAmount > 0 ? [{ label: `Descuento ${order.discountCode || ''}`.trim(), value: -order.discountAmount }] : []),
             { label: 'Envío',                 value: order.shipping },
             { label: 'Impuesto (IVA)',         value: order.tax },
           ] as const).map(row => (
             <div key={row.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span style={{ fontSize: 13, fontFamily: '"Geist", sans-serif', color: 'var(--ink-80)' }}>{row.label}</span>
               <span style={{ fontSize: 13, fontFamily: '"Geist", sans-serif', color: 'var(--ink)' }}>
-                {row.value === 0 ? <span style={{ color: 'var(--green)' }}>Gratis</span> : `$${row.value.toFixed(2)}`}
+                {row.value === 0 ? <span style={{ color: 'var(--green)' }}>Gratis</span> : row.value < 0 ? <span style={{ color: 'var(--green)' }}>-${Math.abs(row.value).toFixed(2)}</span> : `$${row.value.toFixed(2)}`}
               </span>
             </div>
           ))}

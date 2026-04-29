@@ -11,6 +11,19 @@ const transporter = nodemailer.createTransport({
 });
 
 const DEFAULT_EMAIL_ASSET_BASE_URL = 'https://raw.githubusercontent.com/kelvinhe04/healthora/main/frontend/public';
+const EMAIL_SANS_FONT = "'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, Helvetica, sans-serif";
+const EMAIL_SERIF_FONT = "'Instrument Serif', Georgia, 'Times New Roman', serif";
+const EMAIL_MONO_FONT = "'JetBrains Mono', 'SFMono-Regular', Consolas, monospace";
+
+const EMAIL_FONT_HEAD = `
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  <style>
+    body, table, td, p, a, span, h1, h2, h3 { font-family: ${EMAIL_SANS_FONT}; }
+    .healthora-serif { font-family: ${EMAIL_SERIF_FONT} !important; }
+    .healthora-mono { font-family: ${EMAIL_MONO_FONT} !important; }
+  </style>`;
 
 const CATEGORY_FOLDER_BY_ID: Record<string, string> = {
   Vitaminas: 'vitaminas',
@@ -50,6 +63,8 @@ type EmailData = {
   orderId: string;
   items: OrderItem[];
   subtotal: number;
+  discountCode?: string;
+  discountAmount?: number;
   tax: number;
   shipping: number;
   total: number;
@@ -65,6 +80,10 @@ type OrderStatusEmailData = {
   items: OrderItem[];
   total: number;
   address?: Address;
+};
+
+type NewsletterEmailData = {
+  email: string;
 };
 
 const FULFILLMENT_EMAIL_COPY: Record<FulfillmentStatus, { label: string; title: string; message: string; detail: string }> = {
@@ -241,7 +260,7 @@ function buildFulfillmentSteps(currentStatus: FulfillmentStatus): string {
 }
 
 export async function sendOrderConfirmationEmail(data: EmailData): Promise<void> {
-  const { customerName, customerEmail, orderId, items, subtotal, tax, shipping, total, address, createdAt } = data;
+  const { customerName, customerEmail, orderId, items, subtotal, discountCode, discountAmount = 0, tax, shipping, total, address, createdAt } = data;
 
   if (!customerEmail) {
     console.error('[EMAIL] No customer email provided, skipping email');
@@ -258,9 +277,10 @@ export async function sendOrderConfirmationEmail(data: EmailData): Promise<void>
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  ${EMAIL_FONT_HEAD}
   <title>Confirmación de tu pedido - Healthora</title>
 </head>
-<body style="margin: 0; padding: 0; background-color: #eef6ef; font-family: Arial, Helvetica, sans-serif;">
+<body style="margin: 0; padding: 0; background-color: #eef6ef; font-family: ${EMAIL_SANS_FONT};">
   <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color: #eef6ef;">
     <tr>
       <td align="center" style="padding: 34px 14px;">
@@ -273,10 +293,10 @@ export async function sendOrderConfirmationEmail(data: EmailData): Promise<void>
                   <td style="vertical-align: top;">
                     <table cellpadding="0" cellspacing="0" border="0">
                       <tr>
-                        <td width="48" height="48" align="center" style="width: 48px; height: 48px; border-radius: 999px; background-color: #c8ee2e; color: #213a27; font-family: Georgia, 'Times New Roman', serif; font-size: 34px; line-height: 48px; font-weight: 400;">h</td>
+                        <td class="healthora-serif" width="48" height="48" align="center" style="width: 48px; height: 48px; border-radius: 999px; background-color: #c8ee2e; color: #213a27; font-family: ${EMAIL_SERIF_FONT}; font-size: 34px; line-height: 48px; font-weight: 400;">h</td>
                         <td style="padding-left: 12px; vertical-align: middle;">
-                          <p style="margin: 0; font-size: 22px; line-height: 24px; font-weight: 800; color: #ffffff; letter-spacing: -0.4px;">Healthora</p>
-                          <p style="margin: 3px 0 0 0; font-size: 12px; line-height: 16px; color: #c8ee2e; font-weight: 700; letter-spacing: 1.4px; text-transform: uppercase;">Pedido confirmado</p>
+                          <p class="healthora-serif" style="margin: 0; font-family: ${EMAIL_SERIF_FONT}; font-size: 28px; line-height: 26px; font-weight: 400; color: #ffffff; letter-spacing: -0.7px;">Healthora</p>
+                          <p class="healthora-mono" style="margin: 3px 0 0 0; font-family: ${EMAIL_MONO_FONT}; font-size: 12px; line-height: 16px; color: #c8ee2e; font-weight: 700; letter-spacing: 1.4px; text-transform: uppercase;">Pedido confirmado</p>
                         </td>
                       </tr>
                     </table>
@@ -336,6 +356,16 @@ export async function sendOrderConfirmationEmail(data: EmailData): Promise<void>
                     <p style="margin: 0; font-size: 14px; color: #213a27; font-weight: 700;">${formatPrice(subtotal)}</p>
                   </td>
                 </tr>
+                ${discountAmount > 0 ? `
+                <tr>
+                  <td style="padding: 14px 20px; border-top: 1px solid #e8efe9;">
+                    <p style="margin: 0; font-size: 14px; color: #11845b;">Descuento ${escapeHtml(discountCode || '')}</p>
+                  </td>
+                  <td align="right" style="padding: 14px 20px; border-top: 1px solid #e8efe9;">
+                    <p style="margin: 0; font-size: 14px; color: #11845b; font-weight: 700;">-${formatPrice(discountAmount)}</p>
+                  </td>
+                </tr>
+                ` : ''}
                 <tr>
                   <td style="padding: 14px 20px; border-top: 1px solid #e8efe9;">
                     <p style="margin: 0; font-size: 14px; color: #64756a;">Envío</p>
@@ -371,9 +401,8 @@ export async function sendOrderConfirmationEmail(data: EmailData): Promise<void>
                 <tr>
                   <td style="padding: 22px 24px;">
                     <p style="margin: 0; font-size: 16px; color: #213a27; font-weight: 800;">${escapeHtml(address.name)}</p>
-                    <p style="margin: 8px 0 0 0; font-size: 14px; line-height: 21px; color: #64756a;">${escapeHtml(address.address)}</p>
-                    <p style="margin: 3px 0 0 0; font-size: 14px; line-height: 21px; color: #64756a;">${escapeHtml(address.city)}, ${escapeHtml(address.postal)}</p>
-                    <p style="margin: 3px 0 0 0; font-size: 14px; line-height: 21px; color: #64756a;">Tel. ${escapeHtml(address.phone)}</p>
+                    <p style="margin: 9px 0 0 0; font-size: 14px; line-height: 22px; color: #64756a;">${escapeHtml(address.city)}, ${escapeHtml(address.address)}, ${escapeHtml(address.postal)}</p>
+                    <p style="margin: 5px 0 0 0; font-size: 14px; line-height: 21px; color: #64756a;">Tel. ${escapeHtml(address.phone)}</p>
                   </td>
                 </tr>
               </table>
@@ -421,7 +450,7 @@ export async function sendOrderConfirmationEmail(data: EmailData): Promise<void>
               <table cellpadding="0" cellspacing="0" border="0" width="100%">
                 <tr>
                   <td align="center">
-                    <p style="margin: 0 0 8px 0; font-size: 24px; font-weight: 800; color: #ffffff; letter-spacing: -0.5px;">Healthora</p>
+                    <p class="healthora-serif" style="margin: 0 0 8px 0; font-family: ${EMAIL_SERIF_FONT}; font-size: 28px; font-weight: 400; color: #ffffff; letter-spacing: -0.7px;">Healthora</p>
                     <p style="margin: 0 0 12px 0; font-size: 13px; color: #c8ee2e; font-weight: 700;">
                       Tu salud, nuestra prioridad
                     </p>
@@ -477,9 +506,8 @@ export async function sendOrderStatusUpdateEmail(data: OrderStatusEmailData): Pr
             <tr>
               <td style="padding: 22px 24px;">
                 <p style="margin: 0; font-size: 16px; color: #213a27; font-weight: 800;">${escapeHtml(address.name)}</p>
-                <p style="margin: 8px 0 0 0; font-size: 14px; line-height: 21px; color: #64756a;">${escapeHtml(address.address)}</p>
-                <p style="margin: 3px 0 0 0; font-size: 14px; line-height: 21px; color: #64756a;">${escapeHtml(address.city)}, ${escapeHtml(address.postal)}</p>
-                <p style="margin: 3px 0 0 0; font-size: 14px; line-height: 21px; color: #64756a;">Tel. ${escapeHtml(address.phone)}</p>
+                <p style="margin: 9px 0 0 0; font-size: 14px; line-height: 22px; color: #64756a;">${escapeHtml(address.city)}, ${escapeHtml(address.address)}, ${escapeHtml(address.postal)}</p>
+                <p style="margin: 5px 0 0 0; font-size: 14px; line-height: 21px; color: #64756a;">Tel. ${escapeHtml(address.phone)}</p>
               </td>
             </tr>
           </table>
@@ -494,9 +522,10 @@ export async function sendOrderStatusUpdateEmail(data: OrderStatusEmailData): Pr
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  ${EMAIL_FONT_HEAD}
   <title>Actualización de tu pedido - Healthora</title>
 </head>
-<body style="margin: 0; padding: 0; background-color: #eef6ef; font-family: Arial, Helvetica, sans-serif;">
+<body style="margin: 0; padding: 0; background-color: #eef6ef; font-family: ${EMAIL_SANS_FONT};">
   <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color: #eef6ef;">
     <tr>
       <td align="center" style="padding: 34px 14px;">
@@ -508,10 +537,10 @@ export async function sendOrderStatusUpdateEmail(data: OrderStatusEmailData): Pr
                   <td style="vertical-align: top;">
                     <table cellpadding="0" cellspacing="0" border="0">
                       <tr>
-                        <td width="48" height="48" align="center" style="width: 48px; height: 48px; border-radius: 999px; background-color: #c8ee2e; color: #213a27; font-family: Georgia, 'Times New Roman', serif; font-size: 34px; line-height: 48px; font-weight: 400;">h</td>
+                        <td class="healthora-serif" width="48" height="48" align="center" style="width: 48px; height: 48px; border-radius: 999px; background-color: #c8ee2e; color: #213a27; font-family: ${EMAIL_SERIF_FONT}; font-size: 34px; line-height: 48px; font-weight: 400;">h</td>
                         <td style="padding-left: 12px; vertical-align: middle;">
-                          <p style="margin: 0; font-size: 22px; line-height: 24px; font-weight: 800; color: #ffffff; letter-spacing: -0.4px;">Healthora</p>
-                          <p style="margin: 3px 0 0 0; font-size: 12px; line-height: 16px; color: #c8ee2e; font-weight: 700; letter-spacing: 1.4px; text-transform: uppercase;">Actualización de pedido</p>
+                          <p class="healthora-serif" style="margin: 0; font-family: ${EMAIL_SERIF_FONT}; font-size: 28px; line-height: 26px; font-weight: 400; color: #ffffff; letter-spacing: -0.7px;">Healthora</p>
+                          <p class="healthora-mono" style="margin: 3px 0 0 0; font-family: ${EMAIL_MONO_FONT}; font-size: 12px; line-height: 16px; color: #c8ee2e; font-weight: 700; letter-spacing: 1.4px; text-transform: uppercase;">Actualización de pedido</p>
                         </td>
                       </tr>
                     </table>
@@ -587,7 +616,7 @@ export async function sendOrderStatusUpdateEmail(data: OrderStatusEmailData): Pr
               <table cellpadding="0" cellspacing="0" border="0" width="100%">
                 <tr>
                   <td align="center">
-                    <p style="margin: 0 0 8px 0; font-size: 24px; font-weight: 800; color: #ffffff; letter-spacing: -0.5px;">Healthora</p>
+                    <p class="healthora-serif" style="margin: 0 0 8px 0; font-family: ${EMAIL_SERIF_FONT}; font-size: 28px; font-weight: 400; color: #ffffff; letter-spacing: -0.7px;">Healthora</p>
                     <p style="margin: 0 0 12px 0; font-size: 13px; color: #c8ee2e; font-weight: 700;">Tu salud, nuestra prioridad</p>
                     <p style="margin: 0; font-size: 12px; color: #aebdaf;">© 2026 Healthora. Todos los derechos reservados.</p>
                   </td>
@@ -615,4 +644,79 @@ export async function sendOrderStatusUpdateEmail(data: OrderStatusEmailData): Pr
   } catch (err) {
     console.error('[EMAIL] Error sending order status update email:', err);
   }
+}
+
+export async function sendNewsletterSubscriptionEmail(data: NewsletterEmailData): Promise<void> {
+  const safeEmail = escapeHtml(data.email);
+  const shopUrl = getFrontendUrl();
+
+  const html = `
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  ${EMAIL_FONT_HEAD}
+  <title>Bienvenido al newsletter de Healthora</title>
+</head>
+<body style="margin: 0; padding: 0; background-color: #eef6ef; font-family: ${EMAIL_SANS_FONT};">
+  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color: #eef6ef;">
+    <tr>
+      <td align="center" style="padding: 34px 14px;">
+        <table width="620" cellpadding="0" cellspacing="0" border="0" style="max-width: 620px; width: 100%; background-color: #ffffff; border-radius: 24px; overflow: hidden; border: 1px solid #dce9df;">
+          <tr>
+            <td style="background-color: #213a27; background-image: linear-gradient(135deg, #213a27 0%, #0f7c59 62%, #c8ee2e 160%); padding: 36px 38px 40px 38px;">
+              <table cellpadding="0" cellspacing="0" border="0">
+                <tr>
+                  <td class="healthora-serif" width="48" height="48" align="center" style="width: 48px; height: 48px; border-radius: 999px; background-color: #c8ee2e; color: #213a27; font-family: ${EMAIL_SERIF_FONT}; font-size: 34px; line-height: 48px;">h</td>
+                  <td style="padding-left: 12px; vertical-align: middle;">
+                    <p class="healthora-serif" style="margin: 0; font-family: ${EMAIL_SERIF_FONT}; font-size: 28px; line-height: 26px; font-weight: 400; color: #ffffff; letter-spacing: -0.7px;">Healthora</p>
+                    <p class="healthora-mono" style="margin: 3px 0 0 0; font-family: ${EMAIL_MONO_FONT}; font-size: 12px; line-height: 16px; color: #c8ee2e; font-weight: 700; letter-spacing: 1.4px; text-transform: uppercase;">Newsletter</p>
+                  </td>
+                </tr>
+              </table>
+              <h1 style="margin: 30px 0 0 0; font-size: 32px; line-height: 38px; font-weight: 800; color: #ffffff; letter-spacing: -0.7px;">Ya estás suscrito</h1>
+              <p style="margin: 10px 0 0 0; font-size: 16px; line-height: 25px; color: #e4f7e9;">Gracias por unirte al newsletter de Healthora. Te enviaremos ofertas, lanzamientos y consejos de bienestar seleccionados para cuidar tu salud.</p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding: 30px 38px 10px 38px;">
+              <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color: #f4fbef; border-radius: 18px; border: 1px solid #cfeac5;">
+                <tr>
+                  <td style="padding: 22px 24px;">
+                    <p style="margin: 0; font-size: 11px; color: #53725e; text-transform: uppercase; letter-spacing: 1.4px; font-weight: 800;">Correo suscrito</p>
+                    <p style="margin: 8px 0 0 0; font-size: 17px; line-height: 24px; font-weight: 800; color: #213a27;">${safeEmail}</p>
+                    <p style="margin: 12px 0 0 0; font-size: 14px; line-height: 22px; color: #64756a;">Prometemos enviarte solo contenido útil: promociones reales, novedades del catálogo y tips de cuidado personal.</p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding: 26px 38px 38px 38px;" align="center">
+              <a href="${shopUrl}" style="display: inline-block; background-color: #213a27; color: #c8ee2e; text-decoration: none; padding: 16px 34px; border-radius: 999px; font-size: 15px; line-height: 18px; font-weight: 800; letter-spacing: 0.2px;">Explorar Healthora</a>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding: 28px 38px; background-color: #213a27;" align="center">
+              <p class="healthora-serif" style="margin: 0 0 8px 0; font-family: ${EMAIL_SERIF_FONT}; font-size: 28px; font-weight: 400; color: #ffffff; letter-spacing: -0.7px;">Healthora</p>
+              <p style="margin: 0; font-size: 12px; color: #aebdaf;">Tu salud, nuestra prioridad.</p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+  `;
+
+  const info = await transporter.sendMail({
+    from: process.env.SMTP_FROM || 'Healthora <noreply@healthora.com>',
+    to: data.email,
+    subject: 'Bienvenido al newsletter de Healthora',
+    html,
+  });
+
+  console.log('[EMAIL] Newsletter subscription sent to:', data.email, 'MessageId:', info.messageId);
 }
