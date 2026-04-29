@@ -13,9 +13,10 @@ Healthora es un e-commerce de farmacia/salud con catálogo real de 200 productos
 5. [Base de Datos (MongoDB)](#5-base-de-datos-mongodb)
 6. [Autenticación (Clerk)](#6-autenticación-clerk)
 7. [Pagos (Stripe)](#7-pagos-stripe)
-8. [Flujos Principales](#8-flujos-principales)
-9. [Variables de Entorno](#9-variables-de-entorno)
-10. [Cómo Levantar el Proyecto](#10-cómo-levantar-el-proyecto)
+8. [Emails (nodemailer)](#8-emails-nodemailer)
+9. [Flujos Principales](#9-flujos-principales)
+10. [Variables de Entorno](#10-variables-de-entorno)
+11. [Cómo Levantar el Proyecto](#11-cómo-levantar-el-proyecto)
 
 ---
 
@@ -31,6 +32,7 @@ graph TB
         CLERK["Clerk<br/>(Autenticación / JWT)"]
         STRIPE["Stripe<br/>(Pagos)"]
         MONGO["MongoDB Atlas<br/>(Base de Datos)"]
+        GMAIL["Gmail SMTP<br/>(Emails)"]
     end
 
     subgraph Servidor["Backend Hono + Bun<br/>localhost:3001"]
@@ -48,6 +50,7 @@ graph TB
     STRIPE -- "checkout.session.completed" --> WEBHOOK
     WEBHOOK --> MONGO
     FE -- "Redirect pago" --> STRIPE
+    ROUTES -- "SMTP" --> GMAIL
 ```
 
 ---
@@ -61,51 +64,59 @@ Healthora/
 │       ├── index.ts              ← Punto de entrada, monta la app Hono
 │       ├── db/
 │       │   ├── connection.ts     ← Conexión MongoDB
-│       │   ├── models/           ← Schemas Mongoose (Product, Order, User, Category)
-│       │   ├── seed.ts           ← Script: carga 200 productos y 10 categorías
-│       │   └── seed-orders.ts    ← Script: carga órdenes de ejemplo
+│       │   ├── models/        ← Schemas Mongoose (Product, Order, User, Category, Review)
+│       │   ├── seed.ts       ← Script: carga 200 productos y 10 categorías
+│       │   ├── seed-orders.ts   ← Script: carga órdenes de ejemplo
+│       │   └── seed-reviews.ts ← Script: carga reseñas de ejemplo
 │       ├── middleware/
-│       │   ├── clerkAuth.ts      ← Verifica JWT + sincroniza usuario
-│       │   └── requireAdmin.ts   ← Bloquea si rol !== 'admin'
+│       │   ├── clerkAuth.ts    ← Verifica JWT + sincroniza usuario
+│       │   └── requireAdmin.ts  ← Bloquea si rol !== 'admin'
 │       ├── routes/
-│       │   ├── products.ts
-│       │   ├── categories.ts
-│       │   ├── cart.ts
-│       │   ├── checkout.ts
-│       │   ├── orders.ts
-│       │   ├── account.ts
-│       │   ├── webhooks.ts
-│       │   └── admin/            ← Dashboard, orders, products, users, sales, earnings
+│       │   ├── products.ts    ← Catálogo de productos
+│       │   ├── categories.ts ← Categorías
+│       │   ├── cart.ts     ← Carrito persistente
+│       │   ├── checkout.ts  ← Crear sesión de Stripe
+│       │   ├── orders.ts   ← Órdenes del usuario
+│       │   ├── account.ts  ← Direcciónes guardadas
+│       │   ├── webhooks.ts  ← Webhook de Stripe
+│       │   ├── newsletter.ts ← Suscripción al newsletter
+│       │   ├── reviews.ts  ← Reseñas de productos
+│       │   └── admin/     ← Dashboard, orders, products, users, sales, earnings
 │       ├── lib/
-│       │   ├── clerk.ts          ← SDK de Clerk
-│       │   ├── stripe.ts         ← SDK de Stripe
-│       │   └── orderStatus.ts    ← Utilidad de normalización de estado
-│       └── types/                ← Tipos TypeScript compartidos
+│       │   ├── clerk.ts     ← SDK de Clerk
+│       │   ├── stripe.ts    ← SDK de Stripe
+│       │   ├── email.ts    ← nodemailer (SMTP)
+│       │   ├── orderStatus.ts ← Utilidad de normalización de estado
+│       │   └── promotions.ts ← Promociones activas
+│       ├── test-email.ts    ← Script de prueba de SMTP
+│       └── types/         ← Tipos TypeScript compartidos
 │
 ├── frontend/
 │   └── src/
-│       ├── main.tsx              ← Entry point + ClerkProvider + QueryClient
-│       ├── App.tsx               ← Router, estado global, sincronización de carrito
+│       ├── main.tsx        ← Entry point + ClerkProvider + QueryClient
+│       ├── App.tsx         ← Router, estado global, sincronización de carrito
 │       ├── components/
-│       │   ├── chrome/           ← Header, Footer, Topbar, SignInModal
-│       │   ├── shared/           ← ProductCard, Stars, Button, Icon
-│       │   └── admin/            ← UI del panel de administración
+│       │   ├── chrome/    ← Header, Footer, Topbar, SignInModal
+│       │   ├── shared/   ← ProductCard, Stars, Button, Icon, ReviewSection
+│       │   └── admin/    ← UI del panel de administración
 │       ├── pages/
-│       │   ├── Landing.tsx       ← Home con productos destacados
-│       │   ├── Catalog.tsx       ← Grid de productos con filtros
-│       │   ├── ProductDetail.tsx ← Vista detalle de producto
-│       │   ├── CartDrawer.tsx    ← Carrito lateral
-│       │   ├── Checkout.tsx      ← Formulario + pago Stripe
-│       │   ├── Success.tsx       ← Confirmación de orden
-│       │   ├── Club.tsx          ← Página de membresía/club
+│       │   ├── Landing.tsx    ← Home con productos destacados
+│       │   ├── Catalog.tsx    ← Grid de productos con filtros
+│       │   ├── ProductDetail.tsx ← Vista detalle + reseñas
+│       │   ├── CartDrawer.tsx  ← Carrito lateral
+│       │   ├── Checkout.tsx   ← Formulario + pago Stripe
+│       │   ├── Success.tsx    ← Confirmación de orden
+│       │   ├── Orders.tsx     ← Historial de órdenes
+│       │   ├── Club.tsx      ← Página de membresía
 │       │   └── admin/AdminApp.tsx
-│       ├── hooks/                ← useProducts, useCategories, useOrders (TanStack Query)
-│       ├── store/cartStore.ts    ← Estado del carrito (Zustand)
-│       └── lib/api.ts            ← Cliente HTTP centralizado
+│       ├── hooks/          ← useProducts, useCategories, useOrders, useReviews
+│       ├── store/cartStore.ts ← Estado del carrito (Zustand)
+│       ├── lib/api.ts     ← Cliente HTTP centralizado
+│       └── types/index.ts
 │
 ├── docs/
-│   └── arquitectura.md           ← Este archivo
-├── package.json                  ← Scripts raíz del monorepo
+│   └── arquitectura.md          ← Este archivo
+├── package.json                 ← Scripts raíz del monorepo
 └── .gitignore
 ```
 
@@ -139,6 +150,7 @@ graph TD
     Cart["CartDrawer.tsx"]
     Checkout["Checkout.tsx"]
     Success["Success.tsx"]
+    Orders["Orders.tsx"]
     Admin["AdminApp.tsx"]
     Club["Club.tsx"]
 
@@ -150,6 +162,7 @@ graph TD
     App --> Cart
     App --> Checkout
     App --> Success
+    App --> Orders
     App --> Admin
     App --> Club
 ```
@@ -166,6 +179,7 @@ La app es SPA. Las vistas se controlan con el parámetro `?view=` en la URL.
 | Carrito | drawer lateral | Se abre desde el Header |
 | Checkout | `/?view=checkout` | Formulario + pago |
 | Éxito | `/?view=success` | Confirmación |
+| Órdenes | `/?view=orders` | Historial de órdenes |
 | Admin | `/admin` | Panel de administración |
 | Club | `/club` | Membresía |
 | SSO | `/sso-callback` | Callback de Clerk |
@@ -178,7 +192,7 @@ stateDiagram-v2
     GuestCart --> AuthCart: Login (carga carrito del servidor)
     AuthCart --> GuestCart: Logout (limpia carrito auth)
     AuthCart --> AuthCart: Agrega/quita producto → guarda en backend
-    GuestCart --> GuestCart: Agrega/quita → solo localStorage
+    GuestCart --> GuestCart: Agrega/quito → solo localStorage
 ```
 
 - El carrito de invitado vive en **localStorage** (Zustand persist).
@@ -207,6 +221,7 @@ Configurado en `frontend/vite.config.ts`. En producción se reemplaza por la URL
 | Mongoose | 9.5.0 | ODM para MongoDB |
 | Clerk Backend | 3.3.0 | Verificación de JWT |
 | Stripe | 22.0.2 | Pagos |
+| nodemailer | 7.0 | Envío de emails |
 
 ### Mapa de Rutas
 
@@ -229,8 +244,18 @@ graph LR
         A7["PUT /account/addresses"]
     end
 
+    subgraph Reseñas["Reseñas"]
+        R1["GET /reviews/:productId"]
+        R2["POST /reviews/:productId"]
+        R3["DELETE /reviews/:reviewId"]
+    end
+
     subgraph Webhook
         W1["POST /webhooks/stripe"]
+    end
+
+    subgraph Newsletter
+        N1["POST /newsletter/subscribe"]
     end
 
     subgraph Admin["Admin (JWT + rol admin)"]
@@ -277,59 +302,6 @@ total    = subtotal + shipping + tax
 
 ## 5. Base de Datos (MongoDB)
 
-### Diagrama ER
-
-```mermaid
-erDiagram
-    USER {
-        string clerkId PK
-        string name
-        string email
-        string role
-        array  cart
-        array  addresses
-    }
-
-    PRODUCT {
-        string id PK
-        string name
-        string brand
-        string category
-        string need
-        number price
-        number stock
-        array  images
-        array  benefits
-        array  faq
-        boolean active
-    }
-
-    ORDER {
-        ObjectId _id PK
-        string customerId FK
-        array  items
-        number subtotal
-        number tax
-        number shipping
-        number total
-        string paymentStatus
-        string fulfillmentStatus
-        string stripeSessionId
-        object address
-    }
-
-    CATEGORY {
-        string id PK
-        string label
-        string sub
-        string color
-    }
-
-    USER ||--o{ ORDER : "realiza"
-    ORDER }o--|| PRODUCT : "contiene"
-    PRODUCT }o--|| CATEGORY : "pertenece a"
-```
-
 ### Colecciones
 
 #### `products`
@@ -341,21 +313,30 @@ Contiene los 200 productos reales. Campos importantes:
 - `stock` — se decrementa al completarse una orden
 - `faq[]` — preguntas frecuentes del producto
 - `benefits[]`, `skinTypes[]`, `certifications[]` — arrays descriptivos
+- **Reseñas**: cada producto puede tener reseñas vinculadas
 
 #### `orders`
 - `paymentStatus`: `pending_payment | paid | cancelled | refunded`
 - `fulfillmentStatus`: `unfulfilled | processing | shipped | delivered | cancelled`
 - `items[]`: snapshot del producto al momento de compra (nombre, precio, qty)
 - `stripeSessionId`: único, usado para recuperar la orden post-pago
+- `createdAt` — fecha de creación en zona horaria UTC
 
 #### `users`
-- `clerkId`: viene de Clerk, es el identificador principal
+- `clerkId` — viene de Clerk, es el identificador principal
 - `role`: `customer` (por defecto) o `admin` (asignado por email o metadata de Clerk)
 - `cart[]`: `{ productId, qty }` — carrito persistente del usuario
 - `addresses[]`: direcciones guardadas con `isDefault`
 
 #### `categories`
 10 categorías: `cuidado-bebe`, `cuidado-personal`, `fitness`, `fragancias`, `hidratantes`, `maquillaje`, `medicamentos`, `salud-piel`, `suplementos`, `vitaminas`.
+
+#### `reviews`
+- `productId` — referencia al producto
+- `userId` — referencia al usuario (clerkId)
+- `rating` — 1-5 estrellas
+- `comment` — texto de la reseña
+- `createdAt` — fecha de creación
 
 ---
 
@@ -401,7 +382,7 @@ sequenceDiagram
     FE->>ST: Redirect al checkout de Stripe
     U->>ST: Ingresa datos de tarjeta
     ST->>BE: POST /webhooks/stripe (checkout.session.completed)
-    BE->>BE: Crear Order + decrementar stock
+    BE->>BE: Crear Order + descuenta stock
     ST->>FE: Redirect a /?view=success&session_id=...
     FE->>BE: GET /orders?stripeSessionId=<id>
     BE-->>FE: Orden creada
@@ -409,11 +390,54 @@ sequenceDiagram
 ```
 
 - El webhook verifica la firma de Stripe (`STRIPE_WEBHOOK_SECRET`) antes de procesar.
-- La orden se crea **solo en el webhook**, nunca antes, para evitar órdenes sin pago.
+- La orden se crea **solo en el webhook**, nunca antes, para避免 órdenes sin pago.
+- Al crear la orden, se decrementa el stock de cada producto.
 
 ---
 
-## 8. Flujos Principales
+## 8. Emails (nodemailer)
+
+```mermaid
+sequenceDiagram
+    participant U as Usuario
+    participant FE as Frontend
+    participant BE as Backend
+    participant GM as Gmail SMTP
+
+    U->>FE: Llega a Success.tsx después de pagar
+    FE->>BE: GET /orders?stripeSessionId=...
+    BE-->>FE: Orden creada
+    FE->>BE: POST /orders/confirm-email { orderId }
+    BE->>GM: sendOrderConfirmationEmail()
+    GM->>U: Email de confirmación
+```
+
+### Configuración SMTP
+
+El backend usa **nodemailer** con SMTP de Gmail:
+
+```env
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USER=tu-gmail@gmail.com
+SMTP_PASS=contraseña-de-app-de-16-caracteres
+SMTP_FROM=Healthora <noreply@healthora.com>
+```
+
+Para generar la contraseña de aplicación:
+1. Ve a https://myaccount.google.com/security
+2. Activa "Verificación en 2 pasos"
+3. Busca "Contraseñas de aplicaciones" y genera una para "Correo"
+
+### Emails enviados
+
+- **Confirmación de Pedido**: se envía cuando el usuario llega a la página de éxito después de pagar.
+- **Actualización de estado**: cuando cambia `fulfillmentStatus` (Admin actualiza la orden).
+- **Newsletter**: suscripción desde el Footer.
+
+---
+
+## 9. Flujos Principales
 
 ### Compra Completa
 
@@ -433,7 +457,7 @@ flowchart TD
     K --> L["Webhook crea Order + descuenta stock"]
     L --> M["Redirect a Success.tsx"]
     M --> N["GET /orders?stripeSessionId=..."]
-    N --> O["Muestra confirmación con detalle"]
+    N --> O["Muestra confirmación + envía email"]
 ```
 
 ### Flujo de Admin
@@ -441,7 +465,7 @@ flowchart TD
 ```mermaid
 flowchart TD
     Login["Login con email de admin"] --> Access["GET /admin/access (valida rol)"]
-    Access --> Dashboard["Dashboard: KPIs, ventas diarias, stock bajo"]
+    Access --> Dashboard["Dashboard: KPIs, ventas diarias (30 días), stock bajo"]
     Dashboard --> Orders["Gestión de órdenes (filtrar, cambiar estado)"]
     Dashboard --> Products["CRUD de productos"]
     Dashboard --> Users["Gestión de usuarios (cambiar rol, eliminar)"]
@@ -451,7 +475,7 @@ flowchart TD
 
 ---
 
-## 9. Variables de Entorno
+## 10. Variables de Entorno
 
 ### Backend (`backend/.env`)
 
@@ -465,6 +489,11 @@ flowchart TD
 | `PORT` | Puerto del backend (default: `3001`) |
 | `FRONTEND_URL` | URL del frontend para CORS (default: `http://localhost:5173`) |
 | `ADMIN_EMAILS` | Emails con rol admin, separados por coma |
+| `SMTP_HOST` | Host SMTP (ej. `smtp.gmail.com`) |
+| `SMTP_PORT` | Puerto SMTP (587 o 465) |
+| `SMTP_USER` | Usuario SMTP |
+| `SMTP_PASS` | Contraseña de aplicación |
+| `SMTP_FROM` | Remitente del email |
 
 ### Frontend (`frontend/.env`)
 
@@ -475,7 +504,7 @@ flowchart TD
 
 ---
 
-## 10. Cómo Levantar el Proyecto
+## 11. Cómo Levantar el Proyecto
 
 ### Prerrequisitos
 
@@ -483,6 +512,7 @@ flowchart TD
 - Cuenta en [MongoDB Atlas](https://www.mongodb.com/atlas) (cluster gratuito M0 funciona)
 - Cuenta en [Clerk](https://clerk.com/) (plan gratuito)
 - Cuenta en [Stripe](https://stripe.com/) (modo test)
+- Cuenta de Gmail (para enviar emails)
 
 ### Pasos
 
@@ -499,7 +529,9 @@ cp frontend/.env.example frontend/.env
 
 # 3. Sembrar la base de datos (solo primera vez)
 cd backend
-bun run seed         # carga 200 productos + 10 categorías
+bun run seed           # carga 200 productos + 10 categorías
+bun run seed-orders   # (opcional) carga órdenes de ejemplo
+bun run seed-reviews    # (opcional) carga reseñas de ejemplo
 
 # 4. Levantar ambos servidores en paralelo (desde la raíz)
 cd ..
@@ -523,7 +555,7 @@ bun run dev          # Inicia frontend + backend en paralelo
 # Backend
 bun run dev          # Inicia con hot-reload
 bun run seed         # Carga 200 productos y 10 categorías
-bun run seed-orders  # Carga órdenes de ejemplo
+bun run seed-reviews  # Carga reseñas de ejemplo
 
 # Frontend
 bun run dev          # Vite dev server
@@ -559,6 +591,9 @@ mindmap
     Pagos
       Stripe
       Webhooks
+    Emails
+      nodemailer
+      SMTP Gmail
     Imágenes
       200 productos
       4 imgs por producto

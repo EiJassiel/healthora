@@ -18,6 +18,7 @@ E-commerce académico de farmacia y salud. Catálogo real de 200 productos en 10
 | Estado cliente | Zustand | 5.0 |
 | Estado servidor | TanStack Query | 5.100 |
 | Gráficas | Recharts | 3.8 |
+| Emails | nodemailer (SMTP) | 7.0 |
 
 ---
 
@@ -29,9 +30,11 @@ E-commerce académico de farmacia y salud. Catálogo real de 200 productos en 10
 - Checkout con dirección obligatoria, cálculo de impuesto (7%) y envío ($6.90, gratis sobre $50).
 - Órdenes creadas exclusivamente al confirmar pago por webhook de Stripe.
 - Panel admin protegido: CRUD de productos, gestión de órdenes y usuarios, métricas reales.
-- Dashboard admin con KPIs en tiempo real, ventas diarias, productos con stock bajo.
+- Dashboard admin con KPIs en tiempo real, ventas diarias (30 días consecutivos), productos con stock bajo.
 - Catálogo conserva categoría, página y filtros al volver desde detalle de producto.
 - Roles `customer` y `admin` gestionados por Clerk + MongoDB.
+- Reseñas de productos con rating y comentarios.
+- Emails de confirmación de pedido con nodemailer (SMTP Gmail).
 
 ---
 
@@ -44,12 +47,13 @@ Healthora/
 │   │   ├── index.ts               ← Entry point Hono
 │   │   ├── db/
 │   │   │   ├── connection.ts
-│   │   │   ├── models/            ← Product, Order, User, Category
-│   │   │   ├── seed.ts            ← 200 productos + 10 categorías
-│   │   │   └── seed-orders.ts
+│   │   │   ├── models/            ← Product, Order, User, Category, Review
+│   │   │   ├── seed.ts          ← 200 productos + 10 categorías
+│   │   │   ├── seed-orders.ts   ← Órdenes de ejemplo
+│   │   │   └── seed-reviews.ts  ← Reseñas de ejemplo
 │   │   ├── middleware/
-│   │   │   ├── clerkAuth.ts       ← Verifica JWT + upsert usuario
-│   │   │   └── requireAdmin.ts    ← Bloquea si rol !== 'admin'
+│   │   │   ├── clerkAuth.ts      ← Verifica JWT + upsert usuario
+│   │   │   └── requireAdmin.ts   ← Bloquea si rol !== 'admin'
 │   │   ├── routes/
 │   │   │   ├── products.ts
 │   │   │   ├── categories.ts
@@ -58,27 +62,63 @@ Healthora/
 │   │   │   ├── orders.ts
 │   │   │   ├── account.ts
 │   │   │   ├── webhooks.ts
+│   │   │   ├── newsletter.ts
+│   │   │   ├── reviews.ts
 │   │   │   └── admin/
-│   │   └── lib/                   ← clerk.ts, stripe.ts, orderStatus.ts
+│   │   │       ├── adminAccess.ts
+│   │   │       ├── adminDashboard.ts
+│   │   │       ├── adminOrders.ts
+│   │   │       ├── adminProducts.ts
+│   │   │       ├── adminUsers.ts
+│   │   │       ├── adminSales.ts
+│   │   │       └── adminEarnings.ts
+│   │   ├── lib/
+│   │   │   ├── clerk.ts         ← SDK de Clerk
+│   │   │   ├── stripe.ts        ← SDK de Stripe
+│   │   │   ├── email.ts        ← nodemailer (SMTP)
+│   │   │   ├── orderStatus.ts  ← Utilidad de normalización
+│   │   │   └── promotions.ts ← Promociones activas
+│   │   ├── test-email.ts       ← Script de prueba de SMTP
+│   │   └── types/
+│   │       ├── hono.ts
+│   │       └── index.ts
 │   ├── .env.example
 │   └── package.json
 │
 ├── frontend/
 │   ├── public/products/           ← Imágenes por categoría (4 por producto)
 │   ├── src/
-│   │   ├── main.tsx               ← ClerkProvider + QueryClientProvider
-│   │   ├── App.tsx                ← Router + cart sync lifecycle
-│   │   ├── components/            ← chrome/, shared/, admin/
-│   │   ├── pages/                 ← Landing, Catalog, ProductDetail, Checkout…
-│   │   ├── hooks/                 ← useProducts, useCategories, useOrders
-│   │   ├── store/cartStore.ts     ← Zustand (guest vs auth)
-│   │   └── lib/api.ts             ← Cliente HTTP centralizado
+│   │   ├── main.tsx           ← ClerkProvider + QueryClientProvider
+│   │   ├── App.tsx           ← Router + cart sync lifecycle
+│   │   ├── components/
+│   │   │   ├── chrome/       ← Header, Footer, Topbar, SignInModal
+│   │   │   ├── shared/      ← ProductCard, Stars, Button, Icon, ReviewSection
+│   │   │   └── admin/      ← UI del panel de administración
+│   │   ├── pages/
+│   │   │   ├── Landing.tsx       ← Home con productos destacados
+│   │   │   ├── Catalog.tsx       ← Grid de productos con filtros
+│   │   │   ├── ProductDetail.tsx ← Vista detalle + reseñas
+│   │   │   ├── CartDrawer.tsx    ← Carrito lateral
+│   │   │   ├── Checkout.tsx      ← Formulario + pago Stripe
+│   │   │   ├── Success.tsx       ← Confirmación de orden
+│   │   │   ├── Orders.tsx        ← Historial de órdenes
+│   │   │   ├── Club.tsx         ← Página de membresía
+│   │   │   └── admin/AdminApp.tsx
+│   │   ├── hooks/
+│   │   │   ├── useProducts.ts
+│   │   │   ├── useCategories.ts
+│   │   │   ├── useOrders.ts
+│   │   │   └── useReviews.ts
+│   │   ├── store/cartStore.ts  ← Zustand (guest vs auth)
+│   │   ├── lib/api.ts      ← Cliente HTTP centralizado
+│   │   ├── types/index.ts
+│   │   └── promotions.ts
 │   ├── .env.example
 │   └── package.json
 │
 ├── docs/
-│   └── arquitectura.md            ← Diagramas, flujos, esquemas BD
-├── package.json                   ← Scripts raíz (concurrently)
+│   └── arquitectura.md          ← Diagramas, flujos, esquemas BD
+├── package.json                ← Scripts raíz (concurrently)
 └── README.md
 ```
 
@@ -106,6 +146,13 @@ PORT=3001
 FRONTEND_URL=http://localhost:5173
 CLERK_JWT_KEY=
 ADMIN_EMAILS=tu-correo@dominio.com
+
+# SMTP (nodemailer) - opcional
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USER=tu-gmail@gmail.com
+SMTP_PASS=contraseña-de-app-de-16-caracteres
+SMTP_FROM=Healthora <noreply@healthora.com>
 ```
 
 > `ADMIN_EMAILS` puede tener varios emails separados por coma. Al iniciar sesión con uno de esos emails, el middleware le asigna automáticamente `role: 'admin'` en MongoDB.
@@ -144,8 +191,9 @@ cd frontend && bun install && bun run dev
 
 ```bash
 cd backend
-bun run seed          # carga 200 productos + 10 categorías
-bun run seed-orders   # (opcional) carga órdenes de ejemplo
+bun run seed           # carga 200 productos + 10 categorías
+bun run seed-orders    # (opcional) carga órdenes de ejemplo
+bun run seed-reviews  # (opcional) carga reseñas de ejemplo
 ```
 
 ### Webhook de Stripe en local
@@ -191,18 +239,32 @@ stripe listen --forward-to http://localhost:3001/webhooks/stripe
 | GET | `/account/addresses` | Direcciones guardadas |
 | PUT | `/account/addresses` | Guardar direcciones |
 
+### Reseñas
+
+| Método | Ruta | Descripción |
+|---|---|---|
+| GET | `/reviews/:productId` | Reseñas de un producto |
+| POST | `/reviews/:productId` | Crear reseña |
+| DELETE | `/reviews/:reviewId` | Eliminar reseña (solo autor o admin) |
+
 ### Webhook
 
 | Método | Ruta | Descripción |
 |---|---|---|
 | POST | `/webhooks/stripe` | Recibe `checkout.session.completed` → crea orden + descuenta stock |
 
+### Public Newsletter
+
+| Método | Ruta | Descripción |
+|---|---|---|
+| POST | `/newsletter/subscribe` | Suscribir email al newsletter |
+
 ### Admin (JWT + `role: admin`)
 
 | Método | Ruta | Descripción |
 |---|---|---|
 | GET | `/admin/access` | Valida acceso admin |
-| GET | `/admin/dashboard` | KPIs, ventas diarias, órdenes recientes, stock bajo |
+| GET | `/admin/dashboard` | KPIs, ventas diarias (30 días), órdenes recientes, stock bajo |
 | GET | `/admin/orders` | Lista órdenes (filtro `?fulfillmentStatus=`) |
 | PATCH | `/admin/orders/:id/statuses` | Actualiza `paymentStatus` y/o `fulfillmentStatus` |
 | GET | `/admin/products` | Lista todos los productos |
@@ -241,11 +303,53 @@ stripe listen --forward-to http://localhost:3001/webhooks/stripe
 
 ---
 
+## Zonas Horarias
+
+- **Frontend**: Todas las fechas se muestran en `America/Panama`.
+- **Stripe**: Configurar en Settings → Account details → Timezone: `America/Panama`.
+
+---
+
 ## Admin
 
 - Acceso por `ADMIN_EMAILS` en `.env` o por `role: 'admin'` guardado en MongoDB.
 - Si se modifica `ADMIN_EMAILS`, reiniciar el backend y volver a iniciar sesión.
 - El frontend valida el acceso llamando `GET /admin/access` antes de renderizar el panel.
+
+---
+
+## Emails de Confirmación
+
+El sistema envía un email de confirmación al cliente después de cada compra exitosa usando **nodemailer** con SMTP.
+
+### Configuración de Gmail SMTP
+
+1. **Crear o usar una cuenta de Gmail** (ej: `healthora24@gmail.com`)
+
+2. **Activar verificación en 2 pasos**:
+   - Ve a https://myaccount.google.com/security
+   - Activa "Verificación en 2 pasos"
+
+3. **Generar contraseña de aplicación**:
+   - Ve a https://myaccount.google.com/security
+   - Busca "Contraseñas de aplicaciones" (al final de la página)
+   - Selecciona: App = "Correo", Dispositivo = "Otro (especificar)"
+   - Te dará una contraseña de 16 caracteres
+
+4. **Configurar en `backend/.env`**:
+   ```env
+   SMTP_HOST=smtp.gmail.com
+   SMTP_PORT=587
+   SMTP_USER=tu-gmail@gmail.com
+   SMTP_PASS=la-contraseña-de-16-caracteres
+   SMTP_FROM=Healthora <noreply@healthora.com>
+   ```
+
+### Emails enviados
+
+- Confirmación de Pedido (al completar compra)
+- Actualización de estado de orden (cuando cambia fulfillmentStatus)
+- Suscripción al Newsletter
 
 ---
 
@@ -266,45 +370,3 @@ node_modules/
 ```
 
 Los reportes temporales, scripts locales de utilidad y herramientas de agentes no se versionen aunque estén en el árbol local.
-
----
-
-## Email de Confirmación de Pedido
-
-El sistema envía un email de confirmación al cliente después de cada compra exitosa. Esto se hace desde la página de éxito (no requiere webhook de Stripe).
-
-### Configuración de Gmail SMTP
-
-Para que funcione, necesitas configurar un Gmail que envíe los correos:
-
-1. **Crear o usar una cuenta de Gmail** (ej: `healthora24@gmail.com`)
-
-2. **Activar verificación en 2 pasos** (obligatorio para contraseñas de aplicación):
-   - Ve a https://myaccount.google.com/security
-   - Activa "Verificación en 2 pasos"
-
-3. **Generar contraseña de aplicación**:
-   - Ve a https://myaccount.google.com/security
-   - Busca "Contraseñas de aplicaciones" (al final de la página)
-   - Selecciona: App = "Correo", Dispositivo = "Otro (especificar)"
-   - Te dará una contraseña de 16 caracteres
-
-4. **Configurar en `backend/.env`**:
-
-```env
-SMTP_HOST=smtp.gmail.com
-SMTP_PORT=587
-SMTP_USER=tu-gmail@gmail.com
-SMTP_PASS=la-contraseña-de-16-caracteres
-SMTP_FROM=Healthora <noreply@healthora.com>
-```
-
-### Nota Importante
-
-- El email de confirmación se envía **al correo del usuario que hizo la compra** (cualquier cuenta: Gmail, Outlook, Yahoo, etc.)
-- El `SMTP_USER` es solo la cuenta que **envía** los mensajes
-- No necesitas verificar los destinatarios - pueden ser cualquier email
-
-### Fallback sin webhook
-
-El email se envía desde la página de éxito (`/orders`), por lo que funciona incluso sin el Stripe CLI corriendo. El webhook de Stripe es opcional para crear la orden inmediatamente, pero el email de confirmación siempre se envía cuando el usuario llega a la página de éxito después de pagar.

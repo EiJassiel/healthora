@@ -22,6 +22,7 @@ E-commerce académico de farmacia y salud con catálogo real de 200 productos, c
 | Estado cliente | Zustand 5 (carrito) |
 | Estado servidor | TanStack Query 5 (productos, órdenes) |
 | Gráficas | Recharts 3.8 (admin) |
+| Emails | nodemailer (SMTP) |
 
 ---
 
@@ -37,6 +38,13 @@ URLs autorizadas en Clerk: `http://localhost:5173`, `http://localhost:5175`, `ht
 
 ---
 
+## Zonas Horarias
+
+- **Frontend**: Todas las fechas se muestran en `America/Panama` (Clerk usa por defecto la del navegador).
+- **Stripe**: Configurar en Settings → Account details → Timezone: `America/Panama`.
+
+---
+
 ## Comandos Clave
 
 ```bash
@@ -45,6 +53,12 @@ bun run dev
 
 # Sembrar BD (solo primera vez o cuando se actualicen productos)
 cd backend && bun run seed
+
+# Sembrar órdenes de ejemplo
+cd backend && bun run seed-orders
+
+# Sembrar reviews de ejemplo
+cd backend && bun run seed-reviews
 
 # Webhook de Stripe en local
 stripe listen --forward-to http://localhost:3001/webhooks/stripe
@@ -67,6 +81,7 @@ stripe listen --forward-to http://localhost:3001/webhooks/stripe
 - 4 imágenes por producto en `frontend/public/products/<categoria>/<product-id>-N.jpg`.
 - El seed hace `updateOne + upsert: true`, es seguro re-ejecutar.
 - Los productos tienen: nombre, marca, categoría, necesidad (`need`), precio, stock, beneficios, instrucciones, ingredientes, advertencias, FAQ, imágenes, y más campos descriptivos.
+- **Reseñas**: Cada producto puede tener reseñas con rating (1-5), comentario, fecha y datos del usuario. Seed disponible en `seed-reviews.ts`.
 
 ---
 
@@ -125,7 +140,7 @@ Accesible en `/admin` (ruta protegida por Clerk + validación de rol).
 
 | Sección | Qué hace |
 |---|---|
-| Dashboard | KPIs (ingresos, órdenes, usuarios, stock bajo), ventas diarias, órdenes recientes |
+| Dashboard | KPIs (ingresos, órdenes, usuarios, stock bajo), ventas diarias (30 días consecutivos), órdenes recientes |
 | Pedidos | Lista todas las órdenes, permite cambiar `fulfillmentStatus` |
 | Productos | CRUD completo, eliminación masiva, filtros por categoría |
 | Usuarios | Lista con rol asignado, cambiar rol, eliminar usuario local |
@@ -145,6 +160,30 @@ Accesible en `/admin` (ruta protegida por Clerk + validación de rol).
 
 ---
 
+## Emails (nodemailer)
+
+El sistema envía emails de confirmación usando **nodemailer** con SMTP. Configuración en `backend/.env`:
+
+```env
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USER=tu-gmail@gmail.com
+SMTP_PASS=contraseña-de-app-de-16-caracteres
+SMTP_FROM=Healthora <noreply@healthora.com>
+```
+
+Para generar la contraseña de aplicación:
+1. Ve a https://myaccount.google.com/security
+2. Activa "Verificación en 2 pasos"
+3. Busca "Contraseñas de aplicaciones" y genera una para "Correo"
+
+Emails enviados:
+- Confirmación de Pedido (al completar compra)
+- Actualización de estado de orden (cuando cambia fulfillmentStatus)
+- Suscripción al Newsletter
+
+---
+
 ## Decisiones Técnicas Relevantes
 
 - **Hono sobre Express/Elysia**: migración realizada para aprovechar el rendimiento en Bun y la API más limpia de contexto.
@@ -153,6 +192,7 @@ Accesible en `/admin` (ruta protegida por Clerk + validación de rol).
 - **Carrito separado guest/auth**: evita mezclar ítems entre sesiones de distintos usuarios en el mismo dispositivo.
 - **URL-based navigation**: las vistas del frontend se controlan con `?view=` en la URL, lo que permite preservar el estado del catálogo al navegar al detalle y volver.
 - **`stripeSessionId` único en órdenes**: índice sparse unique en MongoDB para evitar duplicados si el webhook se dispara dos veces.
+- **Gráfica de 30 días**: el backend genera las 30 fechas consecutivamente, fillando con 0 los días sin ventas.
 
 ---
 
@@ -169,6 +209,9 @@ Accesible en `/admin` (ruta protegida por Clerk + validación de rol).
 - Rutas de ventas con agrupación por producto, categoría y marca.
 - Rutas de ganancias con desglose mensual.
 - Script `cleanupDuplicates.ts` para sanear la colección de usuarios.
+- Reseñas de productos (`Review` modelo + rutas CRUD).
+- Sistema de emails con nodemailer.
+- Gráfica de ingresos 30 días con fill de fechas vacías.
 
 ### Frontend
 - Catálogo con 200 productos, 10 categorías, paginación y filtros persistentes en URL.
@@ -176,11 +219,13 @@ Accesible en `/admin` (ruta protegida por Clerk + validación de rol).
 - Checkout con campos de dirección obligatorios.
 - Carrito lateral (`CartDrawer.tsx`) con sincronización al backend.
 - Panel admin completo: Dashboard, Pedidos, Productos, Usuarios, Ventas, Ganancias.
-- Gráficos de ventas diarias y ganancias mensuales con Recharts.
+- Gráficos de ventas diarias y ganancias mensais con Recharts.
 - `SignInModal.tsx` para forzar login antes de proceder al pago.
 - Página `Club.tsx` de membresía/fidelidad.
 - Navegación del catálogo conserva filtro activo y página al volver desde detalle de producto.
 - Icono SVG personalizado en el Header.
+- Sección de reseñas en `ProductDetail.tsx`.
+- Fechas en zona horaria `America/Panama`.
 
 ---
 
@@ -195,13 +240,3 @@ tmp/
 dist/
 node_modules/
 ```
-
----
-
-## Próximos Pasos Sugeridos
-
-- Reseñas de productos (modelo `Review` en MongoDB).
-- Notificaciones por email al confirmar orden (Resend o SendGrid + webhook).
-- Página de perfil del usuario con historial de órdenes.
-- Modo oscuro.
-- Deploy: frontend en Vercel, backend en Railway o Fly.io, MongoDB Atlas ya listo.
