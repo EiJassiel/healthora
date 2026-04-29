@@ -18,8 +18,7 @@ export const productsRouter = new Hono()
     else if (query.sort === 'rating') q = q.sort({ rating: -1 });
     else q = q.sort({ createdAt: -1 });
 
-    const products = await q.lean();
-    return c.json({ products, total: products.length });
+    return c.json(await q.lean());
   })
   .get('/count', async (c) => {
     const count = await Product.countDocuments({ active: true });
