@@ -290,7 +290,7 @@ export async function sendOrderConfirmationEmail(data: EmailData): Promise<void>
             <td style="background-color: #213a27; background-image: linear-gradient(135deg, #213a27 0%, #0f7c59 62%, #c8ee2e 160%); padding: 34px 38px 38px 38px;">
               <table cellpadding="0" cellspacing="0" border="0" width="100%">
                 <tr>
-                  <td style="vertical-align: top;">
+<td style="vertical-align: top;">
                     <table cellpadding="0" cellspacing="0" border="0">
                       <tr>
                         <td class="healthora-serif" width="48" height="48" align="center" style="width: 48px; height: 48px; border-radius: 999px; background-color: #c8ee2e; color: #213a27; font-family: ${EMAIL_SERIF_FONT}; font-size: 34px; line-height: 48px; font-weight: 400;">h</td>
@@ -302,11 +302,6 @@ export async function sendOrderConfirmationEmail(data: EmailData): Promise<void>
                     </table>
                     <h1 style="margin: 30px 0 0 0; font-size: 31px; line-height: 38px; font-weight: 800; color: #ffffff; letter-spacing: -0.7px;">Gracias por tu compra</h1>
                     <p style="margin: 10px 0 0 0; font-size: 16px; line-height: 25px; color: #e4f7e9;">Hola ${safeCustomerName}, recibimos tu pago y tu pedido ya está confirmado.</p>
-                  </td>
-                  <td width="70" align="right" style="vertical-align: top;">
-                    <table width="56" height="56" cellpadding="0" cellspacing="0" border="0" style="width: 56px; height: 56px; border-radius: 999px; background-color: rgba(255,255,255,0.16); border: 1px solid rgba(255,255,255,0.28);">
-                      <tr><td align="center" style="font-size: 27px; line-height: 56px; color: #c8ee2e; font-weight: 800;">&#10003;</td></tr>
-                    </table>
                   </td>
                 </tr>
               </table>

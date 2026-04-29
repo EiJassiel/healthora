@@ -6,6 +6,7 @@ import { useOrders } from '../hooks/useOrders';
 import { Icon } from '../components/shared/Icon';
 import { api } from '../lib/api';
 import type { Order, OrderAddress } from '../types';
+import { useOnceLoading, Skeleton } from '../components/admin';
 
 interface OrdersProps {
   onBack: () => void;
@@ -178,9 +179,11 @@ function OrderDetail({
                 <div style={{ fontSize: 14, fontFamily: '"Geist", sans-serif', fontWeight: 500, color: 'var(--ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {item.productName}
                 </div>
-                <div style={{ fontSize: 12, color: 'var(--ink-60)', fontFamily: '"Geist", sans-serif', marginTop: 3 }}>
-                  {item.qty > 1 ? `${item.qty} unidades · $${item.price.toFixed(2)} c/u` : '1 unidad · $' + item.price.toFixed(2)}
-                </div>
+                {item.qty > 1 && (
+                  <div style={{ fontSize: 12, color: 'var(--ink-60)', fontFamily: '"Geist", sans-serif', marginTop: 3 }}>
+                    {item.qty} unidades · ${item.price.toFixed(2)} c/u
+                  </div>
+                )}
               </div>
               <div style={{ textAlign: 'right', flexShrink: 0 }}>
                 <div style={{ fontFamily: '"Instrument Serif", serif', fontSize: 20, letterSpacing: '-0.02em' }}>
@@ -276,8 +279,7 @@ function OrderDetail({
                 {order.address.name} · {order.address.phone}
               </div>
               <div style={{ fontSize: 13, fontFamily: '"Geist", sans-serif', color: 'var(--ink-60)', lineHeight: 1.5 }}>
-                {order.address.address}<br />
-                {order.address.city}, {order.address.postal}
+                {order.address.address}, {order.address.city}, {order.address.postal}
               </div>
             </div>
           </div>
@@ -323,9 +325,12 @@ function OrderDetail({
 const EMPTY_ADDR: OrderAddress = { name: '', phone: '', address: '', city: '', postal: '' };
 
 export function Orders({ onBack }: OrdersProps) {
-  const { data: orders, isLoading } = useOrders();
+  const ordersQuery = useOrders();
+  const { data: orders, isLoading } = ordersQuery;
   const queryClient = useQueryClient();
   const { getToken } = useAuth();
+
+  const showOrdersSkeleton = useOnceLoading("client_orders", isLoading);
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
@@ -403,6 +408,7 @@ export function Orders({ onBack }: OrdersProps) {
   return (
     <main style={{ padding: '48px 40px 80px', maxWidth: 1280, margin: '0 auto' }}>
       <style>{`
+        @keyframes shimmer { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }
         @keyframes pulse { 0%,100% { opacity:1 } 50% { opacity:0.4 } }
         .order-card { transition: border-color 160ms, background 160ms; cursor: pointer; }
         .order-card:hover { border-color: var(--ink-20) !important; }
@@ -414,26 +420,65 @@ export function Orders({ onBack }: OrdersProps) {
           <Icon name="arrow-left" size={14} /> Regresar
         </button>
         <div>
-          <div style={{ fontSize: 10, fontFamily: '"JetBrains Mono", monospace', textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--ink-60)', marginBottom: 4 }}>Cuenta</div>
-          <h1 style={{ fontFamily: '"Instrument Serif", serif', fontSize: 38, letterSpacing: '-0.03em', lineHeight: 1, margin: 0, fontWeight: 400 }}>
-            Mis <em style={{ color: 'var(--green)' }}>pedidos</em>
-            {!isLoading && sorted.length > 0 && (
-              <span style={{ fontSize: 14, fontFamily: '"Geist", sans-serif', fontWeight: 400, color: 'var(--ink-60)', marginLeft: 12 }}>
-                {sorted.length} {sorted.length === 1 ? 'pedido' : 'pedidos'}
-              </span>
-            )}
-          </h1>
+          {showOrdersSkeleton || isLoading ? (
+            <>
+              <Skeleton height={12} width={60} borderRadius={4} style={{ marginBottom: 4 }} />
+              <Skeleton height={42} width={200} borderRadius={8} />
+            </>
+          ) : (
+            <>
+              <div style={{ fontSize: 10, fontFamily: '"JetBrains Mono", monospace', textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--ink-60)', marginBottom: 4 }}>Cuenta</div>
+              <h1 style={{ fontFamily: '"Instrument Serif", serif', fontSize: 38, letterSpacing: '-0.03em', lineHeight: 1, margin: 0, fontWeight: 400 }}>
+                Mis <em style={{ color: 'var(--green)' }}>pedidos</em>
+                {sorted.length > 0 && (
+                  <span style={{ fontSize: 14, fontFamily: '"Geist", sans-serif', fontWeight: 400, color: 'var(--ink-60)', marginLeft: 12 }}>
+                    {sorted.length} {sorted.length === 1 ? 'pedido' : 'pedidos'}
+                  </span>
+                )}
+              </h1>
+            </>
+          )}
         </div>
       </div>
 
-      {isLoading ? (
+      {showOrdersSkeleton ? (
         <div style={{ display: 'grid', gridTemplateColumns: '310px 1fr', gap: 24 }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {[1, 2, 3, 4].map(i => (
-              <div key={i} style={{ height: 90, borderRadius: 18, background: 'var(--ink-04)', animation: 'pulse 1.5s ease-in-out infinite' }} />
+          {/* Order list skeleton */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {[100, 100, 100, 100, 100, 100].map((h, i) => (
+              <Skeleton key={i} height={h} borderRadius={16} />
             ))}
           </div>
-          <div style={{ height: 480, borderRadius: 24, background: 'var(--ink-04)', animation: 'pulse 1.5s ease-in-out infinite' }} />
+          {/* Detail skeleton */}
+          <div style={{ background: 'var(--cream)', border: '1px solid var(--ink-06)', borderRadius: 24, padding: 32, display: 'flex', flexDirection: 'column' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 24 }}>
+              <div><Skeleton height={12} width={180} borderRadius={4} /><div style={{ marginTop: 8 }}><Skeleton height={36} width={280} borderRadius={8} /></div></div>
+              <Skeleton height={24} width={90} borderRadius={8} />
+            </div>
+            <Skeleton height={100} borderRadius={12} style={{ marginBottom: 20 }} />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              {[1, 2, 3].map(i => (
+                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                  <Skeleton height={80} width={72} borderRadius={12} />
+                  <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    <Skeleton height={14} width="65%" borderRadius={4} />
+                    <Skeleton height={12} width="40%" borderRadius={4} />
+                  </div>
+                  <Skeleton height={20} width={60} borderRadius={4} />
+                </div>
+              ))}
+            </div>
+            <div style={{ height: 1, background: 'var(--ink-06)', margin: '20px 0' }} />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}><Skeleton height={13} width={140} borderRadius={4} /><Skeleton height={13} width={70} borderRadius={4} /></div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}><Skeleton height={13} width={100} borderRadius={4} /><Skeleton height={13} width={60} borderRadius={4} /></div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}><Skeleton height={13} width={80} borderRadius={4} /><Skeleton height={13} width={50} borderRadius={4} /></div>
+              <div style={{ height: 1, background: 'var(--ink-12)', margin: '6px 0' }} />
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}><Skeleton height={15} width={60} borderRadius={4} /><Skeleton height={28} width={80} borderRadius={8} /></div>
+            </div>
+            <div style={{ height: 1, background: 'var(--ink-06)', margin: '20px 0' }} />
+            <Skeleton height={80} borderRadius={12} />
+          </div>
         </div>
       ) : sorted.length === 0 ? (
         <div style={{ padding: '80px 20px', textAlign: 'center', borderRadius: 24, border: '1px dashed var(--ink-12)', background: 'var(--cream-2)', maxWidth: 480, margin: '0 auto' }}>

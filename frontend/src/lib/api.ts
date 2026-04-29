@@ -93,6 +93,8 @@ export const api = {
         request<Product>(`/admin/products/${id}`, { method: 'PUT', body: JSON.stringify(data) }, token),
       remove: (id: string, token: string) =>
         request<unknown>(`/admin/products/${id}`, { method: 'DELETE' }, token),
+      removeAll: (token: string) =>
+        request<{ deletedCount: number; categoriesCount: number }>('/admin/products', { method: 'DELETE' }, token),
     },
     users: (token: string) => request<unknown>('/admin/users', undefined, token),
     updateUserRole: (id: string, role: 'customer' | 'admin', token: string) =>

@@ -43,7 +43,7 @@ const Ctx = ({ active, payload, label }: { active?: boolean; payload?: { value: 
   return null;
 };
 
-function Skeleton({ height = 20, width, borderRadius = 4 }: { height?: number; width?: string | number; borderRadius?: number }) {
+function Skeleton({ height = 20, width, borderRadius = 4, style }: { height?: number; width?: string | number; borderRadius?: number; style?: CSSProperties }) {
   return (
     <div style={{
       height,
@@ -53,6 +53,7 @@ function Skeleton({ height = 20, width, borderRadius = 4 }: { height?: number; w
       position: 'relative',
       overflow: 'hidden',
       flexShrink: 0,
+      ...style,
     }}>
       <div style={{
         position: 'absolute',

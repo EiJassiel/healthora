@@ -248,6 +248,7 @@ type ProductForm = {
     usage: string;
     ingredients: string;
     warnings: string;
+    extraTabs: { id: string; label: string; content: string }[];
     imageUrl: string;
     image2: string;
     image3: string;
@@ -272,6 +273,7 @@ const emptyForm: ProductForm = {
     usage: "",
     ingredients: "",
     warnings: "",
+    extraTabs: [],
     imageUrl: "",
     image2: "",
     image3: "",
@@ -308,6 +310,7 @@ function productToForm(p: Product): ProductForm {
         usage: p.usage || "",
         ingredients: p.ingredients || "",
         warnings: p.warnings || "",
+        extraTabs: p.extraTabs || [],
         imageUrl: p.imageUrl || p.images?.[0]?.url || "",
         image2: p.images?.[1]?.url || "",
         image3: p.images?.[2]?.url || "",
@@ -353,6 +356,11 @@ function formToPayload(f: ProductForm): Partial<Product> {
         usage: f.usage.trim(),
         ingredients: f.ingredients.trim(),
         warnings: f.warnings.trim(),
+        extraTabs: f.extraTabs.filter(t => t.label.trim() && t.content.trim()).map(t => ({
+            id: slugify(t.label),
+            label: t.label.trim(),
+            content: t.content.trim(),
+        })),
         ...(f.imageUrl ? { imageUrl: f.imageUrl } : {}),
         images: allImages,
         color: f.color,
@@ -601,7 +609,7 @@ function ProductModal({
             return;
         }
         if ((parseInt(form.stock) || 0) <= 0) {
-            setValidationError("El stock debe ser mayor a 0.");
+            setValidationError("Las existencias tienen que ser mayor a 0.");
             return;
         }
         if (!form.imageUrl.trim()) {
@@ -1026,13 +1034,62 @@ function ProductModal({
                                 }}
                                 value={form.warnings}
                                 onChange={setF("warnings")}
-                                placeholder="Opcional: mantener fuera del alcance de los niños…"
+placeholder="Opcional: mantener fuera del alcance de los niños…"
                             />
                         </div>
                     </div>
-                </div>
 
-                {/* Footer */}
+                    {/* Extra Tabs */}
+                    <div style={{ padding: "0 28px 20px", borderTop: "1px solid var(--ink-06)", marginTop: 8 }}>
+                        <div style={{ fontSize: 10, fontFamily: '"JetBrains Mono", monospace', textTransform: "uppercase", letterSpacing: "0.12em", color: "var(--ink-60)", marginBottom: 12, marginTop: 16 }}>
+                            Pestañas personalizadas
+                        </div>
+                        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                            {form.extraTabs.map((tab, idx) => (
+                                <div key={idx} style={{ display: "flex", gap: 8, alignItems: "center", padding: "10px 12px", borderRadius: 10, background: "var(--cream-2)", border: "1px solid var(--ink-06)" }}>
+                                    <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 6 }}>
+                                        <input
+                                            value={tab.label}
+                                            onChange={(e) => {
+                                                const newTabs = [...form.extraTabs];
+                                                newTabs[idx] = { ...newTabs[idx], label: e.target.value };
+                                                setForm((prev) => ({ ...prev, extraTabs: newTabs }));
+                                            }}
+                                            placeholder="Título (ej: Fórmula)"
+                                            style={{ ...inputS, fontSize: 12, fontWeight: 500 }}
+                                        />
+                                        <textarea
+                                            value={tab.content}
+                                            onChange={(e) => {
+                                                const newTabs = [...form.extraTabs];
+                                                newTabs[idx] = { ...newTabs[idx], content: e.target.value };
+                                                setForm((prev) => ({ ...prev, extraTabs: newTabs }));
+                                            }}
+                                            placeholder="Contenido de la pestaña…"
+                                            style={{ ...inputS, minHeight: 60, resize: "vertical", fontSize: 12 }}
+                                        />
+                                    </div>
+                                    <button
+                                        onClick={() => {
+                                            const newTabs = form.extraTabs.filter((_, i) => i !== idx);
+                                            setForm((prev) => ({ ...prev, extraTabs: newTabs }));
+                                        }}
+                                        style={{ ...iconBtnAd, color: "var(--coral)" }}
+                                        title="Eliminar pestaña"
+                                    >
+                                        <Icon name="trash-2" size={14} />
+                                    </button>
+                                </div>
+                            ))}
+                            <button
+                                onClick={() => setForm((prev) => ({ ...prev, extraTabs: [...prev.extraTabs, { id: "", label: "", content: "" }] }))}
+                                style={{ fontSize: 12, color: "var(--green)", cursor: "pointer", padding: "8px 0", textAlign: "left", background: "transparent", border: "none" }}
+                            >
+                                + Agregar pestaña
+                            </button>
+                        </div>
+                    </div>
+                </div>
                 <div
                     style={{
                         padding: "16px 28px",
@@ -1315,6 +1372,7 @@ function AdminPanel({
         title: string;
         description: string;
     } | null>(null);
+    const [confirmDeleteAll, setConfirmDeleteAll] = useState(false);
     const [confirmUserDelete, setConfirmUserDelete] = useState<{
         id: string;
         name: string;
@@ -1479,6 +1537,32 @@ function AdminPanel({
             );
             setConfirmBulkDelete(null);
             setDeleteError(null);
+            setProductSuccess({
+                kicker: "Productos eliminados",
+                title: `${ids.length} producto${ids.length > 1 ? 's' : ''}`,
+                emphasis: "eliminado" + (ids.length > 1 ? 's' : ''),
+                message: "Los productos se eliminaron del catálogo correctamente.",
+            });
+        },
+        onError: (e: Error) => setDeleteError(e.message),
+    });
+
+    const deleteAllMutation = useMutation({
+        mutationFn: async () => {
+            const token = await getAdminToken();
+            return api.admin.products.removeAll(token);
+        },
+        onSuccess: (data) => {
+            invalidateProducts();
+            void queryClient.invalidateQueries({ queryKey: ["categories"] });
+            setSelectedProductIds([]);
+            setConfirmDeleteAll(false);
+            setProductSuccess({
+                kicker: "Catálogo eliminado",
+                title: `${data.deletedCount} productos`,
+                emphasis: "eliminados",
+                message: "Todo el catálogo de productos se ha eliminado correctamente.",
+            });
         },
         onError: (e: Error) => setDeleteError(e.message),
     });
@@ -1563,10 +1647,24 @@ function AdminPanel({
         [dashboardData, orders.length, products.length, users.length],
     );
 
-    const categories = useMemo(
-        () => [...new Set(products.map((p) => p.category))].sort(),
-        [products],
-    );
+    const STATIC_CATEGORIES = [
+        "Vitaminas",
+        "Cuidado personal",
+        "Cuidado del bebé",
+        "Suplementos",
+        "Salud de la piel",
+        "Fitness",
+        "Medicamentos",
+        "Hidratantes",
+        "Fragancias",
+        "Maquillaje",
+    ];
+
+    const categories = useMemo(() => {
+        const fromProducts = products.length > 0 ? [...new Set(products.map((p) => p.category))].sort() : [];
+        const allCategories = new Set([...STATIC_CATEGORIES, ...fromProducts]);
+        return Array.from(allCategories).sort();
+    }, [products]);
 
     const displayedProducts = useMemo(() => {
         return (products as Product[]).filter((p) => {
@@ -2965,6 +3063,16 @@ function AdminPanel({
                                 >
                                     Eliminar seleccionados
                                 </Button>
+                                <Button
+                                    variant="outline"
+                                    onClick={() => setConfirmDeleteAll(true)}
+                                    style={{
+                                        color: "var(--coral)",
+                                        borderColor: "oklch(0.85 0.08 30)",
+                                    }}
+                                >
+                                    Eliminar todo
+                                </Button>
                             </div>
                         </div>
                         )}
@@ -3554,6 +3662,125 @@ function AdminPanel({
                                             {bulkDeleteMutation.isPending
                                                 ? "Eliminando…"
                                                 : "Sí, eliminar"}
+                                        </Button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {confirmDeleteAll && (
+                            <div
+                                onClick={() => {
+                                    setConfirmDeleteAll(false);
+                                    setDeleteError(null);
+                                }}
+                                style={{
+                                    position: "fixed",
+                                    inset: 0,
+                                    background: "rgba(17, 24, 20, 0.28)",
+                                    zIndex: 111,
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                    padding: 24,
+                                }}
+                            >
+                                <div
+                                    onClick={(e) => e.stopPropagation()}
+                                    style={{
+                                        width: "100%",
+                                        maxWidth: 440,
+                                        background: "var(--cream)",
+                                        border: "1px solid var(--ink-06)",
+                                        borderRadius: 24,
+                                        boxShadow:
+                                            "0 28px 80px -36px rgba(0,0,0,0.32)",
+                                        overflow: "hidden",
+                                    }}
+                                >
+                                    <div
+                                        style={{
+                                            padding: "22px 24px 18px",
+                                            borderBottom:
+                                                "1px solid var(--ink-06)",
+                                        }}
+                                    >
+                                        <div
+                                            style={{
+                                                fontSize: 10,
+                                                fontFamily:
+                                                    '"JetBrains Mono", monospace',
+                                                textTransform: "uppercase",
+                                                letterSpacing: "0.12em",
+                                                color: "var(--coral)",
+                                                marginBottom: 8,
+                                            }}
+                                        >
+                                            Peligro
+                                        </div>
+                                        <div
+                                            style={{
+                                                fontFamily:
+                                                    '"Instrument Serif", serif',
+                                                fontSize: 32,
+                                                lineHeight: 1,
+                                                letterSpacing: "-0.03em",
+                                                color: "var(--ink)",
+                                            }}
+                                        >
+                                            Eliminar todo el catálogo
+                                        </div>
+                                    </div>
+                                    <div
+                                        style={{
+                                            padding: "18px 24px",
+                                            borderBottom:
+                                                "1px solid var(--ink-06)",
+                                        }}
+                                    >
+                                        <p
+                                            style={{
+                                                margin: 0,
+                                                fontSize: 15,
+                                                lineHeight: 1.6,
+                                                color: "var(--ink-60)",
+                                            }}
+                                        >
+                                            ¿Estás seguro de que deseas eliminar{" "}
+                                            <strong>todos los productos</strong>{" "}
+                                            del catálogo? Esta acción no se puede deshacer.
+                                        </p>
+                                    </div>
+                                    <div
+                                        style={{
+                                            padding: "16px 24px",
+                                            display: "flex",
+                                            gap: 10,
+                                            justifyContent: "flex-end",
+                                        }}
+                                    >
+                                        <Button
+                                            variant="outline"
+                                            onClick={() => {
+                                                setConfirmDeleteAll(false);
+                                                setDeleteError(null);
+                                            }}
+                                        >
+                                            Cancelar
+                                        </Button>
+                                        <Button
+                                            variant="primary"
+                                            onClick={() => {
+                                                setDeleteError(null);
+                                                deleteAllMutation.mutate();
+                                            }}
+                                            disabled={
+                                                deleteAllMutation.isPending
+                                            }
+                                        >
+                                            {deleteAllMutation.isPending
+                                                ? "Eliminando…"
+                                                : "Sí, eliminar todo"}
                                         </Button>
                                     </div>
                                 </div>
