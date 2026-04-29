@@ -1387,7 +1387,7 @@ function AdminPanel({
 
     useEffect(() => {
         localStorage.setItem("healthora_admin_page", page);
-    }, [page]);
+}, [page]);
 
     const dashboardQuery = useQuery({
         queryKey: ["admin-dashboard"],
@@ -1398,11 +1398,10 @@ function AdminPanel({
         staleTime: 30_000,
     });
     const ordersQuery = useQuery({
-        queryKey: ["admin-orders", orderFulfillmentFilter],
+        queryKey: ["admin-orders"],
         queryFn: async () =>
             api.admin.orders(
                 await getAdminToken(),
-                orderFulfillmentFilter || undefined,
             ) as Promise<AdminOrder[]>,
         enabled: page === "orders",
     });
@@ -4623,7 +4622,7 @@ function AdminPanel({
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {(earnings?.monthly || []).map((row) => (
+                                    {(earnings?.monthly ? [...earnings.monthly].reverse() : []).map((row) => (
                                         <tr key={row.month} style={trStyle}>
                                             <td style={td}>{row.month}</td>
                                             <td
